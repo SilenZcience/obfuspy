@@ -1,9 +1,6 @@
 import os
 from glob import iglob
 
-
-
-
 def accumulatePythonFiles(paths):
     files = []
     for path in paths:
