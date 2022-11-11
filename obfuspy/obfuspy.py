@@ -1,12 +1,10 @@
-import argparse
 
 
-
-
-
-
-
-
+from obfuspy.util.Chars import randChars_A
+from obfuspy.util.FileHelper import accumulatePythonFiles
+from obfuspy.util.ArgParser import parseArgs
+from obfuspy.util.TokenHelper import getBuiltInMethods
+from obfuspy.util.Generator import random_subset
 
 
 
@@ -14,18 +12,20 @@ import argparse
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Obfuscate a python file.')
-    parser.add_argument("-nv", "--novariables", action="store_true", default=False,
-                        help="do not obfuscate variable names")
-    parser.add_argument("-nf", "--nofunctions", action="store_true", default=False,
-                        help="do not obfuscate function names")
-    parser.add_argument("-nn", "--nonumbers", action="store_true", default=False,
-                        help="do not obfuscate numbers")
-    parser.add_argument("-ns", "--nostrings", action="store_true", default=False,
-                        help="do not obfuscate strings")
+    args = parseArgs()
+    print("DEBUG: ARGS:", args)
     
-    args = parser.parse_args()
-    print(args)
+    files = accumulatePythonFiles(getattr(args, 'PATH'))
+    print("Found the following Python-files:\n", [x[0] for x in files])
+    
+    keyword_dict = {}
+    
+    for file, target_name in files:
+        try:
+            fileToObfuscate = open(file, "r", encoding="utf-8").read()
+        except:
+            print(f"An Error occured opening the file {file}!")
+            return
     
 if __name__ == '__main__':
     main()
