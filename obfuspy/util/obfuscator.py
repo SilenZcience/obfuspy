@@ -10,9 +10,30 @@ import os
 import random
 from obfuspy.util.charsets import CHARSETS
 
+VARIABLE_LENGTH = 10#
+VARIABLE_CHARSET = CHARSETS[3]#
+COMMENT_LENGTH = 30
+COMMENT_CHARSET = CHARSETS[3]
+NUMERICAL_DENOMINATOR = 7#
+DEAD_CODE_PROBABILITY = 0.3#
+INDENTATION_STRING = '\t\t\t\t'#
+
+OBFUSCATE_VARIABLE_NAMES = True#
+OBFUSCATE_ARGUMENT_NAMES = True#
+OBFUSCATE_FUNCTION_NAMES = True#
+OBFUSCATE_CLASS_NAMES = True#
+OBFUSCATE_COMMENTS = True
+OBFUSCATE_NUMBERS = False#
+OBFUSCATE_STRINGS = True
+OBFUSCATE_DEAD_CODE = False#
+OBFUSCATE_BUILTINS = True
+OBFUSCATE_ANTIDEBUG = True
+OBFUSCATE_INDENTATION = False#
+
+
 def _random_name_gen(n: int, char_set: list = None):
     if char_set is None:
-        char_set = CHARSETS[1]
+        char_set = CHARSETS[3]
     BUFFER_SIZE = 1_000
 
     def _name_gen(n: int):
@@ -35,25 +56,27 @@ def _random_name_gen(n: int, char_set: list = None):
         yield from random_buffer
 
 @functools.lru_cache(maxsize=1_000)
-def number_deconstructor(num: int, denominator: int) -> str:
+def deconstruct_number(num: int) -> str:
     r = ''
-    if num > denominator:
-        if num // denominator > 1:
-            if num % denominator == 0:
-                r += '(%s*%s)' % (number_deconstructor(num // denominator, denominator), denominator)
+    if num > NUMERICAL_DENOMINATOR:
+        if num // NUMERICAL_DENOMINATOR > 1:
+            if num % NUMERICAL_DENOMINATOR == 0:
+                r += '(%s*%s)' % (deconstruct_number(num // NUMERICAL_DENOMINATOR), NUMERICAL_DENOMINATOR)
             else:
-                r += '(%s*%s+%s)' % (number_deconstructor(num // denominator, denominator), denominator, num % denominator)
+                r += '(%s*%s+%s)' % (deconstruct_number(num // NUMERICAL_DENOMINATOR), NUMERICAL_DENOMINATOR, num % NUMERICAL_DENOMINATOR)
         else:
-            r += '(%s+%s)' % (denominator, number_deconstructor(num - denominator, denominator))
+            r += '(%s+%s)' % (NUMERICAL_DENOMINATOR, deconstruct_number(num - NUMERICAL_DENOMINATOR))
     else:
         r = '%s' % num
     return r
 
 
 class Obfuscator:
+    random_name_gen = _random_name_gen(VARIABLE_LENGTH, VARIABLE_CHARSET)
+    random_cmmt_gen = _random_name_gen(COMMENT_LENGTH,  COMMENT_CHARSET )
+
     def obfuscate(file_modules: set) -> None:
         obfuscator = _Obfuscator()
-        random_gen = _random_name_gen(5)
 
         for file_module in file_modules:
             in_module  = os.path.splitext(os.path.basename(file_module.in_path))[0]
@@ -62,47 +85,105 @@ class Obfuscator:
             file_module.set_tree(ast.parse(file_module.in_code))
 
             for node in ast.walk(file_module.tree):
-                if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
-                    obfuscator.var_map.setdefault(node.id, next(random_gen))
-                elif isinstance(node, ast.arg):
-                    obfuscator.var_map.setdefault(node.arg, next(random_gen))
-                elif isinstance(node, (ast.ClassDef, ast.FunctionDef)):
-                    obfuscator.var_map.setdefault(node.name, next(random_gen))
-
-
+                if OBFUSCATE_VARIABLE_NAMES and isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+                    obfuscator.var_map.setdefault(node.id, next(Obfuscator.random_name_gen))
+                elif OBFUSCATE_ARGUMENT_NAMES and isinstance(node, ast.arg):
+                    obfuscator.var_map.setdefault(node.arg, next(Obfuscator.random_name_gen))
+                elif OBFUSCATE_FUNCTION_NAMES and isinstance(node, ast.FunctionDef):
+                    obfuscator.var_map.setdefault(node.name, next(Obfuscator.random_name_gen))
+                elif OBFUSCATE_CLASS_NAMES and isinstance(node, ast.ClassDef):
+                    obfuscator.var_map.setdefault(node.name, next(Obfuscator.random_name_gen))
         print(obfuscator.file_map)
 
         for file_module in file_modules:
             obfuscator.visit(file_module.tree)
-            out_code = ast.unparse(file_module.tree)
+            out_code = unparse(file_module.tree)
             prefix   = '#!/usr/bin/env python3\n# -*- coding: utf-8 -*-\n\n'
             post_fix = '\n\n# Obfuscated by *obfuspy* (Silas A. Kraume)\n'
             file_module.set_code(prefix + out_code + post_fix)
 
 
+class Builder(ast._Unparser):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+    def fill(self, text=""):
+        """Indent a piece of text and append it, according to the current
+        indentation level"""
+        self.maybe_newline()
+        self.write(INDENTATION_STRING * self._indent + text)
+
+def unparse(ast_obj):
+    unparser = Builder() if OBFUSCATE_INDENTATION else ast._Unparser()
+    return unparser.visit(ast_obj)
+
+
+def generate_dead_code() -> ast.stmt:
+    choices = [
+        # Unused variable assignment with number
+        lambda: ast.Assign(
+            targets=[ast.Name(id=next(Obfuscator.random_name_gen), ctx=ast.Store())],
+            value=ast.parse(deconstruct_number(random.randint(1, 1000)), mode='eval').body,
+            lineno=0,
+            col_offset=0
+        ),
+        # Unused variable assignment with string
+        lambda: ast.Assign(
+            targets=[ast.Name(id=next(Obfuscator.random_name_gen), ctx=ast.Store())],
+            value=ast.Constant(value=''.join(random.choices('abcdefghijklmnopqrstuvwxyz', k=random.randint(5, 15)))),
+            lineno=0,
+            col_offset=0
+        ),
+        # Unused variable assignment with list
+        lambda: ast.Assign(
+            targets=[ast.Name(id=next(Obfuscator.random_name_gen), ctx=ast.Store())],
+            value=ast.List(
+                elts=[ast.Constant(value=random.randint(1, 100)) for _ in range(random.randint(2, 5))],
+                ctx=ast.Load()
+            ),
+            lineno=0,
+            col_offset=0
+        ),
+        # Unused complex mathematical expression
+        lambda: ast.Assign(
+            targets=[ast.Name(id=next(Obfuscator.random_name_gen), ctx=ast.Store())],
+            value=ast.BinOp(
+                left=ast.parse(deconstruct_number(random.randint(1, 100)), mode='eval').body,
+                op=random.choice([ast.Add(), ast.Mult(), ast.Sub(), ast.Div()]),
+                right=ast.parse(deconstruct_number(random.randint(1, 100)), mode='eval').body
+            ),
+            lineno=0,
+            col_offset=0
+        )
+    ]
+    return random.choice(choices)()
 
 class _Obfuscator(ast.NodeTransformer):
     def __init__(self) -> None:
         self.file_map = {}
         self.var_map = {}
-        self.skip_names = set(dir(builtins))
+        self.skip_names = set(f for f in dir(builtins) if f.startswith('_'))
         self.skip_names.update({
             '__annotations__',
             '__file__',
             '__path__',
-
-            '__name__',
-            '__package__',
-            '__spec__',
-            '__doc__',
         })
-        self.numerical_denominator = 7
 
     def visit_Module(self, node):
         if (node.body and isinstance(node.body[0], ast.Expr) and
-            isinstance(node.body[0].value, ast.Str)):
+            isinstance(node.body[0].value, ast.Constant) and
+            isinstance(node.body[0].value.value, str)):
             node.body.pop(0)
         self.generic_visit(node)
+        if not OBFUSCATE_DEAD_CODE:
+            return node
+        new_body = []
+        for stmt in node.body:
+            new_body.append(stmt)
+            if random.random() < DEAD_CODE_PROBABILITY:
+                for _ in range(random.randint(1, 4)):
+                    new_body.append(generate_dead_code())
+        node.body = new_body
         return node
 
     def visit_Import(self, node):
@@ -183,11 +264,13 @@ class _Obfuscator(ast.NodeTransformer):
         return node
 
     def visit_Constant(self, node):
+        if not OBFUSCATE_NUMBERS:
+            return node
         if isinstance(node.value, int):
             if node.value == 0:
                 expr_str = '(1-1)'
             else:
-                expr_str = number_deconstructor(node.value, self.numerical_denominator)
+                expr_str = deconstruct_number(node.value)
             return ast.parse(expr_str, mode='eval').body
         elif isinstance(node.value, float):
             if node.value == 0:
@@ -196,15 +279,15 @@ class _Obfuscator(ast.NodeTransformer):
                 int_part = int(node.value)
                 decimal_part = node.value - int_part
                 if decimal_part == 0:
-                    expr_str = number_deconstructor(int_part, self.numerical_denominator)
+                    expr_str = deconstruct_number(int_part)
                 else:
                     # Convert decimal to fraction (e.g., 0.5 -> 5/10)
                     decimal_str = str(decimal_part).split('.')[1]
                     numerator = int(decimal_str)
                     denominator = 10 ** len(decimal_str)
-                    int_expr = number_deconstructor(int_part, self.numerical_denominator)
-                    num_expr = number_deconstructor(numerator, self.numerical_denominator)
-                    den_expr = number_deconstructor(denominator, self.numerical_denominator)
+                    int_expr = deconstruct_number(int_part)
+                    num_expr = deconstruct_number(numerator)
+                    den_expr = deconstruct_number(denominator)
                     expr_str = f"({int_expr}+{num_expr}/{den_expr})"
             return ast.parse(expr_str, mode='eval').body
         return node
