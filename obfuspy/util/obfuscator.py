@@ -13,22 +13,22 @@ from obfuspy.util.charsets import CHARSETS
 
 VARIABLE_LENGTH = 5#
 VARIABLE_CHARSET = CHARSETS[0]#
-COMMENT_LENGTH = 30
-COMMENT_CHARSET = CHARSETS[3]
+COMMENT_LENGTH = 10
+COMMENT_CHARSET = CHARSETS[0]
 NUMERICAL_DENOMINATOR = 7#
-DEAD_CODE_PROBABILITY = 0.1#
-ANTI_DEBUG_PROBABILITY = 0.1#
+DEAD_CODE_PROBABILITY = 1#
+ANTI_DEBUG_PROBABILITY = 0.2#
 INDENTATION_STRING = '\t\t\t\t'#
 
 OBFUSCATE_VARIABLE_NAMES = False#
 OBFUSCATE_ARGUMENT_NAMES = False#
 OBFUSCATE_FUNCTION_NAMES = False#
 OBFUSCATE_CLASS_NAMES = False#
-OBFUSCATE_COMMENTS = True
+OBFUSCATE_COMMENTS = False#
 OBFUSCATE_NUMBERS = False#
-OBFUSCATE_STRINGS = False#
-OBFUSCATE_DEAD_CODE = False#
-OBFUSCATE_BUILTINS = True
+OBFUSCATE_STRINGS = True#
+OBFUSCATE_DEAD_CODE = True#
+OBFUSCATE_BUILTINS = False
 OBFUSCATE_ANTIDEBUG = False#
 OBFUSCATE_INDENTATION = False#
 
@@ -166,19 +166,20 @@ def generate_dead_classes() -> ast.stmt:
     return random.choice(choices)()
 
 def generate_dead_functions() -> ast.stmt:
+    random_args = [next(Obfuscator.random_name_gen) for _ in range(random.randint(1, 4))]
     choices = [
         # Unused function with random operations
         lambda: ast.FunctionDef(
             name=next(Obfuscator.random_name_gen),
             args=ast.arguments(
                 posonlyargs=[],
-                args=[ast.arg(arg=next(Obfuscator.random_name_gen)) for _ in range(random.randint(1, 4))],
+                args=[ast.arg(arg=random_arg) for random_arg in random_args],
                 kwonlyargs=[],
                 kw_defaults=[],
                 defaults=[],
             ),
             body=[generate_dead_expressions() for _ in range(random.randint(1, 4))] + [
-                ast.Return(value=ast.Name(id=next(Obfuscator.random_name_gen), ctx=ast.Load()))
+                ast.Return(value=ast.Name(id=random.choice(random_args), ctx=ast.Load()))
             ],
             decorator_list=[],
             lineno=0,
@@ -263,10 +264,10 @@ class _Obfuscator(ast.NodeTransformer):
         if OBFUSCATE_STRINGS:
             node.body[insert_position:insert_position] = generate_str_deobfuscator()
         # TODO: builtins obfuscation
-        self.generic_visit(node)
         if OBFUSCATE_DEAD_CODE:
-            for i in sorted(random.sample(range(len(node.body)+1), int((len(node.body)+1) * DEAD_CODE_PROBABILITY)), reverse=True):
+            for i in sorted(random.sample(range(insert_position+1,len(node.body)+1), int((len(node.body)-insert_position) * DEAD_CODE_PROBABILITY)), reverse=True):
                 node.body.insert(i, generate_dead_code())
+        self.generic_visit(node)
         return node
 
     def visit_Import(self, node):
@@ -302,15 +303,15 @@ class _Obfuscator(ast.NodeTransformer):
             isinstance(node.body[0].value, ast.Constant) and
             isinstance(node.body[0].value.value, str)):
             node.body.pop(0)
-        self.generic_visit(node)
         if OBFUSCATE_DEAD_CODE:
             new_body = []
             for stmt in node.body:
                 new_body.append(stmt)
                 if random.random() < DEAD_CODE_PROBABILITY:
                     for _ in range(random.randint(1, 3)):
-                        new_body.append(generate_dead_code())
+                        new_body.append(generate_dead_functions())
             node.body = new_body
+        self.generic_visit(node)
         return node
 
     def visit_FunctionDef(self, node):
@@ -322,15 +323,15 @@ class _Obfuscator(ast.NodeTransformer):
             isinstance(node.body[0].value, ast.Constant) and
             isinstance(node.body[0].value.value, str)):
             node.body.pop(0)
-        self.generic_visit(node)
         if OBFUSCATE_DEAD_CODE:
             new_body = []
             for stmt in node.body:
                 new_body.append(stmt)
                 if random.random() < DEAD_CODE_PROBABILITY:
                     for _ in range(random.randint(1, 3)):
-                        new_body.append(generate_dead_code())
+                        new_body.append(generate_dead_expressions())
             node.body = new_body
+        self.generic_visit(node)
         return node
 
     def visit_Attribute(self, node):
