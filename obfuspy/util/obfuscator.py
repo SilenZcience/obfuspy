@@ -6,29 +6,39 @@ import ast
 import builtins
 import functools
 import itertools
+import keyword
 import os
 import random
 from obfuspy.util.charsets import CHARSETS
 
-VARIABLE_LENGTH = 10#
-VARIABLE_CHARSET = CHARSETS[3]#
+VARIABLE_LENGTH = 20#
+VARIABLE_CHARSET = CHARSETS[2]#
 COMMENT_LENGTH = 30
 COMMENT_CHARSET = CHARSETS[3]
 NUMERICAL_DENOMINATOR = 7#
-DEAD_CODE_PROBABILITY = 0.3#
-INDENTATION_STRING = '\t\t\t\t'#
+DEAD_CODE_PROBABILITY = 0.1#
+INDENTATION_STRING = '\t\t\t\t\t\t\t\t\t\t\t\t'#
 
 OBFUSCATE_VARIABLE_NAMES = True#
 OBFUSCATE_ARGUMENT_NAMES = True#
 OBFUSCATE_FUNCTION_NAMES = True#
 OBFUSCATE_CLASS_NAMES = True#
 OBFUSCATE_COMMENTS = True
-OBFUSCATE_NUMBERS = False#
+OBFUSCATE_NUMBERS = True#
 OBFUSCATE_STRINGS = True
-OBFUSCATE_DEAD_CODE = False#
+OBFUSCATE_DEAD_CODE = True#
 OBFUSCATE_BUILTINS = True
 OBFUSCATE_ANTIDEBUG = True
-OBFUSCATE_INDENTATION = False#
+OBFUSCATE_INDENTATION = True#
+
+
+ALL_BUILTINS = set(dir(builtins))
+ALL_BUILTINS.update({
+    '__annotations__',
+    '__file__',
+    '__path__',
+})
+ALL_KEYWORDS = set(keyword.kwlist + keyword.softkwlist)
 
 
 def _random_name_gen(n: int, char_set: list = None):
@@ -44,7 +54,9 @@ def _random_name_gen(n: int, char_set: list = None):
                 if len(buffer) == BUFFER_SIZE:
                     yield buffer
                     buffer = []
-                buffer.append(''.join(name))
+                s_name = ''.join(name)
+                if not s_name in ALL_KEYWORDS | ALL_BUILTINS:
+                    buffer.append(s_name)
             yield buffer
             n += 1
 
@@ -74,6 +86,7 @@ def deconstruct_number(num: int) -> str:
 class Obfuscator:
     random_name_gen = _random_name_gen(VARIABLE_LENGTH, VARIABLE_CHARSET)
     random_cmmt_gen = _random_name_gen(COMMENT_LENGTH,  COMMENT_CHARSET )
+    random_key      = random.randint(1_000, 999_999)
 
     def obfuscate(file_modules: set) -> None:
         obfuscator = _Obfuscator()
@@ -93,7 +106,8 @@ class Obfuscator:
                     obfuscator.var_map.setdefault(node.name, next(Obfuscator.random_name_gen))
                 elif OBFUSCATE_CLASS_NAMES and isinstance(node, ast.ClassDef):
                     obfuscator.var_map.setdefault(node.name, next(Obfuscator.random_name_gen))
-        print(obfuscator.file_map)
+        # print(obfuscator.file_map)
+        # print(obfuscator.var_map)
 
         for file_module in file_modules:
             obfuscator.visit(file_module.tree)
@@ -118,7 +132,44 @@ def unparse(ast_obj):
     return unparser.visit(ast_obj)
 
 
-def generate_dead_code() -> ast.stmt:
+def generate_dead_classes() -> ast.stmt:
+    choices = [
+        # Unused class with random methods
+        lambda: ast.ClassDef(
+            name=next(Obfuscator.random_name_gen),
+            bases=[],
+            keywords=[],
+            body=[generate_dead_functions() for _ in range(random.randint(1, 3))],
+            decorator_list=[],
+            lineno=0,
+            col_offset=0
+        ),
+    ]
+    return random.choice(choices)()
+
+def generate_dead_functions() -> ast.stmt:
+    choices = [
+        # Unused function with random operations
+        lambda: ast.FunctionDef(
+            name=next(Obfuscator.random_name_gen),
+            args=ast.arguments(
+                posonlyargs=[],
+                args=[ast.arg(arg=next(Obfuscator.random_name_gen)) for _ in range(random.randint(1, 4))],
+                kwonlyargs=[],
+                kw_defaults=[],
+                defaults=[],
+            ),
+            body=[generate_dead_expressions() for _ in range(random.randint(1, 4))] + [
+                ast.Return(value=ast.Name(id=next(Obfuscator.random_name_gen), ctx=ast.Load()))
+            ],
+            decorator_list=[],
+            lineno=0,
+            col_offset=0
+        ),
+    ]
+    return random.choice(choices)()
+
+def generate_dead_expressions() -> ast.stmt:
     choices = [
         # Unused variable assignment with number
         lambda: ast.Assign(
@@ -144,19 +195,16 @@ def generate_dead_code() -> ast.stmt:
             lineno=0,
             col_offset=0
         ),
-        # Unused complex mathematical expression
-        lambda: ast.Assign(
-            targets=[ast.Name(id=next(Obfuscator.random_name_gen), ctx=ast.Store())],
-            value=ast.BinOp(
-                left=ast.parse(deconstruct_number(random.randint(1, 100)), mode='eval').body,
-                op=random.choice([ast.Add(), ast.Mult(), ast.Sub(), ast.Div()]),
-                right=ast.parse(deconstruct_number(random.randint(1, 100)), mode='eval').body
-            ),
-            lineno=0,
-            col_offset=0
-        )
     ]
     return random.choice(choices)()
+
+def generate_dead_code() -> ast.stmt:
+    return random.choice([
+        generate_dead_classes(),
+        generate_dead_functions(),
+        generate_dead_expressions(),
+    ])
+
 
 class _Obfuscator(ast.NodeTransformer):
     def __init__(self) -> None:
@@ -175,15 +223,14 @@ class _Obfuscator(ast.NodeTransformer):
             isinstance(node.body[0].value.value, str)):
             node.body.pop(0)
         self.generic_visit(node)
-        if not OBFUSCATE_DEAD_CODE:
-            return node
-        new_body = []
-        for stmt in node.body:
-            new_body.append(stmt)
-            if random.random() < DEAD_CODE_PROBABILITY:
-                for _ in range(random.randint(1, 4)):
-                    new_body.append(generate_dead_code())
-        node.body = new_body
+        if OBFUSCATE_DEAD_CODE:
+            new_body = []
+            for stmt in node.body:
+                new_body.append(stmt)
+                if random.random() < DEAD_CODE_PROBABILITY:
+                    for _ in range(random.randint(1, 3)):
+                        new_body.append(generate_dead_code())
+            node.body = new_body
         return node
 
     def visit_Import(self, node):
@@ -219,6 +266,14 @@ class _Obfuscator(ast.NodeTransformer):
             isinstance(node.body[0].value, ast.Str)):
             node.body.pop(0)
         self.generic_visit(node)
+        if OBFUSCATE_DEAD_CODE:
+            new_body = []
+            for stmt in node.body:
+                new_body.append(stmt)
+                if random.random() < DEAD_CODE_PROBABILITY:
+                    for _ in range(random.randint(1, 3)):
+                        new_body.append(generate_dead_code())
+            node.body = new_body
         return node
 
     def visit_FunctionDef(self, node):
@@ -230,6 +285,14 @@ class _Obfuscator(ast.NodeTransformer):
             isinstance(node.body[0].value, ast.Str)):
             node.body.pop(0)
         self.generic_visit(node)
+        if OBFUSCATE_DEAD_CODE:
+            new_body = []
+            for stmt in node.body:
+                new_body.append(stmt)
+                if random.random() < DEAD_CODE_PROBABILITY:
+                    for _ in range(random.randint(1, 3)):
+                        new_body.append(generate_dead_code())
+            node.body = new_body
         return node
 
     def visit_Attribute(self, node):
