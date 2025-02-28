@@ -239,9 +239,10 @@ class _Obfuscator(ast.NodeTransformer):
             isinstance(node.body[0].value.value, str)):
             node.body.pop(0)
         insert_position = 0
-        for i, stmt in enumerate(node.body, start=1):
-            if isinstance(stmt, (ast.Import, ast.ImportFrom)):
+        for i, stmt in enumerate(node.body):
+            if not isinstance(stmt, (ast.Import, ast.ImportFrom)):
                 insert_position = i
+                break
         if OBFUSCATE_ANTIDEBUG:
             node.body[insert_position:insert_position] = generate_anti_debug_code()
             for i in sorted(random.sample(range(insert_position+1,len(node.body)+1), int((len(node.body)-insert_position) * ANTI_DEBUG_PROBABILITY)), reverse=True):
