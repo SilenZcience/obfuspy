@@ -26,19 +26,21 @@ OBFUSCATE_FUNCTION_NAMES = False#
 OBFUSCATE_CLASS_NAMES = False#
 OBFUSCATE_COMMENTS = True
 OBFUSCATE_NUMBERS = False#
-OBFUSCATE_STRINGS = True#
+OBFUSCATE_STRINGS = False#
 OBFUSCATE_DEAD_CODE = False#
 OBFUSCATE_BUILTINS = True
-OBFUSCATE_ANTIDEBUG = True
+OBFUSCATE_ANTIDEBUG = False#
 OBFUSCATE_INDENTATION = False#
 
-
-ALL_BUILTINS = set(dir(builtins))
-ALL_BUILTINS.update({
+BUILTINS_DEFAULT = set(f for f in dir(builtins) if not f.startswith('_'))
+BUILTINS_DUNDER = set(f for f in dir(builtins) if f.startswith('_'))
+BUILTINS_DUNDER.update({
     '__annotations__',
     '__file__',
     '__path__',
 })
+ALL_BUILTINS = BUILTINS_DEFAULT | BUILTINS_DUNDER
+KEYWORDS_VAL = {'True', 'False', 'None'}
 ALL_KEYWORDS = set(keyword.kwlist + keyword.softkwlist)
 
 
@@ -83,6 +85,15 @@ def deconstruct_number(num: int) -> str:
         r = f"{num}"
     return r
 
+def generate_random_comments(code: str) -> str:
+    lines = code.split('\n')
+    for i, _ in enumerate(lines):
+        if lines[i].strip():
+            lines[i] += f"#{''.join(random.choices(COMMENT_CHARSET, k=COMMENT_LENGTH))}"
+        else:
+            lines[i] = f"#{random.choice(lines)}"
+    return '\n'.join(lines)
+
 
 class Obfuscator:
     random_name_gen = _random_name_gen(VARIABLE_LENGTH, VARIABLE_CHARSET)
@@ -120,8 +131,10 @@ class Obfuscator:
         for file_module in file_modules:
             obfuscator.visit(file_module.tree)
             out_code = unparse(file_module.tree)
-            prefix   = '#!/usr/bin/env python3\n# -*- coding: utf-8 -*-\n\n'
-            post_fix = '\n\n# Obfuscated by *obfuspy* (Silas A. Kraume)\n'
+            if OBFUSCATE_COMMENTS:
+                out_code = generate_random_comments(out_code)
+            prefix   = '#!/usr/bin/env python3\n# -*- coding: utf-8 -*-\n'
+            post_fix = '\n# Obfuscated by *obfuspy* (Silas A. Kraume)\n'
             file_module.set_code(prefix + out_code + post_fix)
 
 
