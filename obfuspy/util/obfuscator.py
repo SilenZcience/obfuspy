@@ -11,26 +11,26 @@ import os
 import random
 from obfuspy.util.charsets import CHARSETS
 
-VARIABLE_LENGTH = 5#
-VARIABLE_CHARSET = CHARSETS[0]#
-COMMENT_LENGTH = 10#
-COMMENT_CHARSET = CHARSETS[0]#
+VARIABLE_LENGTH = 50#
+VARIABLE_CHARSET = CHARSETS[4]#
+COMMENT_LENGTH = 100#
+COMMENT_CHARSET = CHARSETS[4]#
 NUMERICAL_DENOMINATOR = 7#
 DEAD_CODE_PROBABILITY = 0.1#
 ANTI_DEBUG_PROBABILITY = 0.2#
 INDENTATION_STRING = '\t\t\t\t'#
 
-OBFUSCATE_VARIABLE_NAMES = False#
-OBFUSCATE_ARGUMENT_NAMES = False#
-OBFUSCATE_FUNCTION_NAMES = False#
-OBFUSCATE_CLASS_NAMES = False#
+OBFUSCATE_VARIABLE_NAMES = True#
+OBFUSCATE_ARGUMENT_NAMES = True#
+OBFUSCATE_FUNCTION_NAMES = True#
+OBFUSCATE_CLASS_NAMES = True#
 OBFUSCATE_COMMENTS = True#
-OBFUSCATE_NUMBERS = False#
+OBFUSCATE_NUMBERS = True#
 OBFUSCATE_STRINGS = True#
 OBFUSCATE_DEAD_CODE = True#
 OBFUSCATE_BUILTINS = False
-OBFUSCATE_ANTIDEBUG = False#
-OBFUSCATE_INDENTATION = False#
+OBFUSCATE_ANTIDEBUG = True#
+OBFUSCATE_INDENTATION = True#
 
 BUILTINS_DEFAULT = set(f for f in dir(builtins) if not f.startswith('_'))
 BUILTINS_DUNDER = set(f for f in dir(builtins) if f.startswith('_'))
@@ -121,12 +121,12 @@ class Obfuscator:
                 elif OBFUSCATE_CLASS_NAMES and isinstance(node, ast.ClassDef):
                     obfuscator.var_map.setdefault(node.name, next(Obfuscator.random_name_gen))
         # print(obfuscator.file_map)
-        print(obfuscator.var_map)
+        # print(obfuscator.var_map)
 
         Obfuscator.random_str_name = next(Obfuscator.random_name_gen)
         obfuscator.var_map.setdefault(Obfuscator.random_str_name, Obfuscator.random_str_name)
         obfuscator.var_map.setdefault('s', next(Obfuscator.random_name_gen))
-        obfuscator.var_map.setdefault('c', next(Obfuscator.random_name_gen))
+        obfuscator.var_map.setdefault('c', next(Obfuscator.random_name_gen)) # the vars we use in the string deobfuscator
 
         for file_module in file_modules:
             obfuscator.visit(file_module.tree)
@@ -193,7 +193,7 @@ def generate_dead_expressions() -> ast.stmt:
         # Unused variable assignment with number
         lambda: ast.Assign(
             targets=[ast.Name(id=next(Obfuscator.random_name_gen), ctx=ast.Store())],
-            value=ast.parse(deconstruct_number(random.randint(1, 1000)), mode='eval').body,
+            value=ast.parse(str(random.randint(1, 9_999_999)), mode='eval').body,
             lineno=0,
             col_offset=0
         ),
