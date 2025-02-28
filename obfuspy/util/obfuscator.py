@@ -13,10 +13,10 @@ from obfuspy.util.charsets import CHARSETS
 
 VARIABLE_LENGTH = 5#
 VARIABLE_CHARSET = CHARSETS[0]#
-COMMENT_LENGTH = 10
-COMMENT_CHARSET = CHARSETS[0]
+COMMENT_LENGTH = 10#
+COMMENT_CHARSET = CHARSETS[0]#
 NUMERICAL_DENOMINATOR = 7#
-DEAD_CODE_PROBABILITY = 1#
+DEAD_CODE_PROBABILITY = 0.1#
 ANTI_DEBUG_PROBABILITY = 0.2#
 INDENTATION_STRING = '\t\t\t\t'#
 
@@ -24,7 +24,7 @@ OBFUSCATE_VARIABLE_NAMES = False#
 OBFUSCATE_ARGUMENT_NAMES = False#
 OBFUSCATE_FUNCTION_NAMES = False#
 OBFUSCATE_CLASS_NAMES = False#
-OBFUSCATE_COMMENTS = False#
+OBFUSCATE_COMMENTS = True#
 OBFUSCATE_NUMBERS = False#
 OBFUSCATE_STRINGS = True#
 OBFUSCATE_DEAD_CODE = True#
@@ -89,7 +89,7 @@ def generate_random_comments(code: str) -> str:
     lines = code.split('\n')
     for i, _ in enumerate(lines):
         if lines[i].strip():
-            lines[i] += f"#{''.join(random.choices(COMMENT_CHARSET, k=COMMENT_LENGTH))}"
+            lines[i] += f"#{next(Obfuscator.random_cmmt_gen)}"
         else:
             lines[i] = f"#{random.choice(lines)}"
     return '\n'.join(lines)
