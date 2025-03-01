@@ -11,36 +11,36 @@ import os
 import random
 from obfuspy.util.charsets import CHARSETS
 
-VARIABLE_LENGTH = 50#
-VARIABLE_CHARSET = CHARSETS[4]#
-COMMENT_LENGTH = 100#
-COMMENT_CHARSET = CHARSETS[4]#
-NUMERICAL_DENOMINATOR = 7#
-DEAD_CODE_PROBABILITY = 0.1#
-ANTI_DEBUG_PROBABILITY = 0.2#
-INDENTATION_STRING = '\t\t\t\t'#
+VARIABLE_LENGTH = 2
+VARIABLE_CHARSET = CHARSETS[0]
+COMMENT_LENGTH = 100
+COMMENT_CHARSET = CHARSETS[3]
+NUMERICAL_DENOMINATOR = 7
+DEAD_CODE_PROBABILITY = 0.3
+ANTI_DEBUG_PROBABILITY = 0.2
+INDENTATION_STRING = '\t\t\t\t\t\t\t\t\t\t\t\t'
 
-OBFUSCATE_VARIABLE_NAMES = True#
-OBFUSCATE_ARGUMENT_NAMES = True#
-OBFUSCATE_FUNCTION_NAMES = True#
-OBFUSCATE_CLASS_NAMES = True#
-OBFUSCATE_COMMENTS = True#
-OBFUSCATE_NUMBERS = True#
-OBFUSCATE_STRINGS = True#
-OBFUSCATE_DEAD_CODE = True#
-OBFUSCATE_BUILTINS = False
-OBFUSCATE_ANTIDEBUG = True#
-OBFUSCATE_INDENTATION = True#
+OBFUSCATE_VARIABLE_NAMES = True
+OBFUSCATE_ARGUMENT_NAMES = True
+OBFUSCATE_FUNCTION_NAMES = True
+OBFUSCATE_CLASS_NAMES = True
+OBFUSCATE_COMMENTS = True
+OBFUSCATE_NUMBERS = True
+OBFUSCATE_STRINGS = True
+OBFUSCATE_DEAD_CODE = True
+OBFUSCATE_BUILTINS = True
+OBFUSCATE_ANTIDEBUG = True
+OBFUSCATE_INDENTATION = True
 
 BUILTINS_DEFAULT = set(f for f in dir(builtins) if not f.startswith('_'))
 BUILTINS_DUNDER = set(f for f in dir(builtins) if f.startswith('_'))
-BUILTINS_DUNDER.update({
-    '__annotations__',
-    '__file__',
-    '__path__',
-})
-ALL_BUILTINS = BUILTINS_DEFAULT | BUILTINS_DUNDER
+# BUILTINS_DUNDER.update({
+#     '__annotations__',
+#     '__file__',
+#     '__path__',
+# })
 KEYWORDS_VAL = {'True', 'False', 'None'}
+ALL_BUILTINS = BUILTINS_DEFAULT | BUILTINS_DUNDER | KEYWORDS_VAL
 ALL_KEYWORDS = set(keyword.kwlist + keyword.softkwlist)
 
 
@@ -127,6 +127,9 @@ class Obfuscator:
         obfuscator.var_map.setdefault(Obfuscator.random_str_name, Obfuscator.random_str_name)
         obfuscator.var_map.setdefault('s', next(Obfuscator.random_name_gen))
         obfuscator.var_map.setdefault('c', next(Obfuscator.random_name_gen)) # the vars we use in the string deobfuscator
+        if OBFUSCATE_BUILTINS:
+            for builtin in ALL_BUILTINS:
+                obfuscator.var_map.setdefault(builtin, next(Obfuscator.random_name_gen))
 
         for file_module in file_modules:
             obfuscator.visit(file_module.tree)
@@ -235,17 +238,26 @@ def generate_anti_debug_code() -> ast.stmt:
     anti_debug_stmt = ''.join(c + ''.join(random.choice(CHARSETS[0]) for _ in range(offset-1)) for c in anti_debug_stmt)
     return ast.parse(f"exec('{anti_debug_stmt}'[::{offset}])").body
 
+def generate_builtin_code(var_map: dict) -> list:
+    return ast.Assign(
+        targets=[ast.Tuple(
+            elts=[ast.Name(id=var_map[b], ctx=ast.Store()) for b in ALL_BUILTINS],
+            ctx=ast.Store()
+        )],
+        value=ast.Tuple(
+            elts=[ast.Name(id=b, ctx=ast.Load()) for b in ALL_BUILTINS],
+            ctx=ast.Load()
+        ),
+        lineno=0,
+        col_offset=0
+    )
+
 
 class _Obfuscator(ast.NodeTransformer):
     def __init__(self) -> None:
         self.file_map = {}
         self.var_map = {}
-        self.skip_names = set(f for f in dir(builtins) if f.startswith('_'))
-        self.skip_names.update({
-            '__annotations__',
-            '__file__',
-            '__path__',
-        })
+        self.skip_names = ALL_KEYWORDS-KEYWORDS_VAL if OBFUSCATE_BUILTINS else ALL_BUILTINS|ALL_KEYWORDS
 
     def visit_Module(self, node):
         if (node.body and isinstance(node.body[0], ast.Expr) and
@@ -268,6 +280,8 @@ class _Obfuscator(ast.NodeTransformer):
             for i in sorted(random.sample(range(insert_position+1,len(node.body)+1), int((len(node.body)-insert_position) * DEAD_CODE_PROBABILITY)), reverse=True):
                 node.body.insert(i, generate_dead_code())
         self.generic_visit(node)
+        if OBFUSCATE_BUILTINS:
+            node.body.insert(insert_position, generate_builtin_code(self.var_map))
         return node
 
     def visit_Import(self, node):
@@ -365,6 +379,8 @@ class _Obfuscator(ast.NodeTransformer):
         return node
 
     def visit_Constant(self, node):
+        if OBFUSCATE_BUILTINS and isinstance(node.value, (bool, type(None))):
+            return ast.Name(id=self.var_map[str(node.value)], ctx=ast.Load())
         if OBFUSCATE_NUMBERS and isinstance(node.value, int):
             if node.value == 0:
                 expr_str = '(1-1)'

@@ -5,8 +5,8 @@ from obfuspy.arg_parser import parseArgs
 from obfuspy.util.obfuscator import Obfuscator
 from obfuspy.util.domain import File_Module
 
+
 def add_file(fileList: set, in_file: str) -> None:
-    print("DEBUG:", in_file)
     if os.path.splitext(in_file)[1] in ['.py', '.py3', '.pyw', '.pyi']:
         fileList.add(File_Module(in_file))
 
