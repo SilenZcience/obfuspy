@@ -6,19 +6,29 @@ from obfuspy.util.obfuscator import Obfuscator
 from obfuspy.util.domain import File_Module
 
 
-def add_file(fileList: set, in_file: str) -> None:
-    if os.path.splitext(in_file)[1] in ['.py', '.py3', '.pyw', '.pyi']:
-        fileList.add(File_Module(in_file))
-
 def acc_py_files(arg_paths) -> set:
     file_modules = set()
     for path in arg_paths:
         if os.path.isfile(path):
-            add_file(file_modules, path)
+            out_file = os.path.join(os.path.dirname(path), 'obfuscated', os.path.basename(path))
+            split_ext = os.path.splitext(path)
+            if split_ext[1] in ['.py', '.py3', '.pyw', '.pyi']:
+                os.makedirs(os.path.dirname(out_file), exist_ok=True)
+                file_modules.add(File_Module(path, out_file))
             continue
-        for dirpath, _, files in os.walk(path):
-            for in_file in files:
-                add_file(file_modules, os.path.join(dirpath, in_file))
+        if os.path.isdir(path):
+            abs_path = os.path.abspath(path)
+            parent_dir = os.path.dirname(abs_path)
+            folder_name = os.path.basename(abs_path)
+            for root, _, files in os.walk(path):
+                for file in files:
+                    in_file = os.path.join(root, file)
+                    rel_path = os.path.relpath(in_file, path)
+                    out_file = os.path.join(parent_dir, 'obfuscated', folder_name, rel_path)
+                    split_ext = os.path.splitext(in_file)
+                    if split_ext[1] in ['.py', '.py3', '.pyw', '.pyi']:
+                        os.makedirs(os.path.dirname(out_file), exist_ok=True)
+                        file_modules.add(File_Module(in_file, out_file))
     return file_modules
 
 def main():
