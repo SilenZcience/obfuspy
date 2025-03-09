@@ -13,6 +13,9 @@ from obfuspy.layers.layer_d import Layer_D
 from obfuspy.layers.layer_e import Layer_E
 from obfuspy.layers.layer_f import Layer_F
 from obfuspy.layers.layer_g import Layer_G
+from obfuspy.layers.layer_h import Layer_H
+from obfuspy.layers.layer_i import Layer_I
+from obfuspy.layers.layer_j import Layer_J
 
 
 OBFUSCATE_NUMBERS = True
@@ -60,6 +63,9 @@ class Obfuscator:
         layer_e = Layer_E(randomizer)
         layer_f = Layer_F(randomizer, ANTI_DEBUG_PROBABILITY)
         layer_g = Layer_G(randomizer, DEAD_CODE_PROBABILITY)
+        layer_h = Layer_H(randomizer)
+        layer_i = Layer_I(randomizer)
+        layer_j = Layer_J(randomizer)
 
         for file_module in file_modules:
         #     in_module  = os.path.splitext(os.path.basename(file_module.in_path))[0]
@@ -90,7 +96,7 @@ class Obfuscator:
         #         obfuscator.var_map.setdefault(builtin, next(Obfuscator.random_name_gen))
 
         for file_module in file_modules:
-            layer_g.visit(file_module.tree)
+            layer_j.visit(file_module.tree)
             out_code = unparse(file_module.tree, OBFUSCATE_INDENTATION, INDENTATION_STRING)
             if OBFUSCATE_COMMENTS:
                 out_code = randomizer.generate_random_comments(out_code)

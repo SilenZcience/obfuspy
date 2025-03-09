@@ -36,6 +36,7 @@ class Layer_B(ast.NodeTransformer):
         self.randomizer = randomizer
 
     def visit_Module(self, node):
+        self.randomizer.randomize_string()
         doc_string = None
         if (node.body and isinstance(node.body[0], ast.Expr) and
             isinstance(node.body[0].value, ast.Constant) and
