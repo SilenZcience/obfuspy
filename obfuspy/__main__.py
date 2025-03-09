@@ -2,8 +2,35 @@
 # -*- coding: utf-8 -*-
 import os
 from obfuspy.arg_parser import parseArgs
+from obfuspy.gui import GUI
 from obfuspy.util.obfuscator import Obfuscator
 from obfuspy.util.domain import File_Module
+
+from obfuspy.layers.layer_a import Layer_A
+from obfuspy.layers.layer_b import Layer_B
+from obfuspy.layers.layer_c import Layer_C
+from obfuspy.layers.layer_d import Layer_D
+from obfuspy.layers.layer_e import Layer_E
+from obfuspy.layers.layer_f import Layer_F
+from obfuspy.layers.layer_g import Layer_G
+from obfuspy.layers.layer_h import Layer_H
+from obfuspy.layers.layer_i import Layer_I
+from obfuspy.layers.layer_j import Layer_J
+
+OBFUSCATION_LAYERS = {
+    'Numerical Constants':   Layer_A,
+    'String Constants':      Layer_B,
+    'Docstrings':            Layer_C,
+    'Assignements':          Layer_D,
+    'Annotations':           Layer_E,
+    'Anti-Debug Statements': Layer_F,
+    'Dead Code':             Layer_G,
+    'Builtins':              Layer_H,
+    'Imports':               Layer_I,
+    'Arguments':             Layer_J,
+}
+
+
 
 
 def acc_py_files(arg_paths) -> set:
@@ -32,6 +59,8 @@ def acc_py_files(arg_paths) -> set:
     return file_modules
 
 def main():
+    GUI(list(OBFUSCATION_LAYERS.keys()))
+    return
     args = parseArgs()
     # print("DEBUG: ARGS:", args)
     file_modules = acc_py_files(args.PATH)
