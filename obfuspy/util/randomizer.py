@@ -28,7 +28,6 @@ class Randomizer:
 
     def set_random_gen(self, n: int, char_set: list = None) -> None:
         self.random_name_gen = Randomizer.create_random_generator(n, char_set)
-        self.random_str_name = next(self.random_name_gen)
 
     def randomize_string(self) -> None:
         self.random_str_name = next(self.random_name_gen)

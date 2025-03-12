@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import argparse
 import os
-from obfuspy.arg_parser import parseArgs
 from obfuspy.gui import GUI
-from obfuspy.util.obfuscator import Obfuscator
 from obfuspy.util.domain import File_Module
+from obfuspy.util.obfuscator import Obfuscator
 
 from obfuspy.layers.layer_a import Layer_A
 from obfuspy.layers.layer_b import Layer_B
@@ -29,8 +29,6 @@ OBFUSCATION_LAYERS = {
     'Imports':               Layer_I,
     'Arguments':             Layer_J,
 }
-
-
 
 
 def acc_py_files(arg_paths) -> set:
@@ -59,12 +57,16 @@ def acc_py_files(arg_paths) -> set:
     return file_modules
 
 def main():
-    print(GUI(OBFUSCATION_LAYERS).run())
-    return
-    args = parseArgs()
-    # print("DEBUG: ARGS:", args)
-    file_modules = acc_py_files(args.PATH)
-    Obfuscator.obfuscate(file_modules)
+    parser = argparse.ArgumentParser(description='obfuscate a python file/module.')
+    parser.add_argument("PATH", action="store", default=None,
+                        nargs="+", help="FILE(s) and/or FOLDER(s) to obfuscate")
+    file_modules = acc_py_files(parser.parse_args().PATH)
+    # TODO: if no files? maybe GUI fileselectdialog
+    settings: dict = GUI(OBFUSCATION_LAYERS).run()
+    settings['file_modules'] = file_modules
+    settings['obf_layers'] = [(OBFUSCATION_LAYERS[l.name], l.settings.values()) for l in settings['layers']]
+    # return
+    Obfuscator.obfuscate(settings)
     for file_module in file_modules:
         with open(file_module.out_path, 'w', encoding='utf-8') as f:
             f.write(file_module.out_code)

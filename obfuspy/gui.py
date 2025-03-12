@@ -244,7 +244,7 @@ class DragDropWindow(QWidget):
         denominator_label = QLabel("Denominator:")
         denominator_label.setStyleSheet(label_style)
         denominator_spin = QSpinBox()
-        denominator_spin.setRange(1, 100)
+        denominator_spin.setRange(2, 100)
         denominator_spin.setValue(6)
         denominator_spin.setStyleSheet("""
             QSpinBox {

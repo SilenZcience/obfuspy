@@ -6,16 +6,6 @@ import ast
 from obfuspy.util.charsets import CHARSETS
 from obfuspy.util.randomizer import Randomizer
 from obfuspy.util.unparser import unparse
-from obfuspy.layers.layer_a import Layer_A
-from obfuspy.layers.layer_b import Layer_B
-from obfuspy.layers.layer_c import Layer_C
-from obfuspy.layers.layer_d import Layer_D
-from obfuspy.layers.layer_e import Layer_E
-from obfuspy.layers.layer_f import Layer_F
-from obfuspy.layers.layer_g import Layer_G
-from obfuspy.layers.layer_h import Layer_H
-from obfuspy.layers.layer_i import Layer_I
-from obfuspy.layers.layer_j import Layer_J
 
 
 OBFUSCATE_NUMBERS = True
@@ -51,23 +41,11 @@ COMMENT_CHARSET = CHARSETS[0]
 class Obfuscator:
 
     @staticmethod
-    def obfuscate(file_modules: set) -> None:
+    def obfuscate(settings: dict) -> None:
         randomizer = Randomizer()
-        randomizer.set_cmmt_data(COMMENT_LENGTH,  COMMENT_CHARSET )
-        randomizer.set_random_gen(VARIABLE_LENGTH, VARIABLE_CHARSET)
+        randomizer.set_random_gen(10, CHARSETS[0])
 
-        layer_a = Layer_A(randomizer, NUMERICAL_DENOMINATOR)
-        layer_b = Layer_B(randomizer)
-        layer_c = Layer_C(randomizer)
-        layer_d = Layer_D(randomizer)
-        layer_e = Layer_E(randomizer)
-        layer_f = Layer_F(randomizer, ANTI_DEBUG_PROBABILITY)
-        layer_g = Layer_G(randomizer, DEAD_CODE_PROBABILITY)
-        layer_h = Layer_H(randomizer)
-        layer_i = Layer_I(randomizer)
-        layer_j = Layer_J(randomizer)
-
-        for file_module in file_modules:
+        for file_module in settings['file_modules']:
         #     in_module  = os.path.splitext(os.path.basename(file_module.in_path))[0]
             # out_module = os.path.splitext(os.path.basename(file_module.out_path))[0]
             # visitor_a.file_map.add(in_module)
@@ -95,10 +73,11 @@ class Obfuscator:
         #     for builtin in ALL_BUILTINS:
         #         obfuscator.var_map.setdefault(builtin, next(Obfuscator.random_name_gen))
 
-        for file_module in file_modules:
-            layer_j.visit(file_module.tree)
-            out_code = unparse(file_module.tree, OBFUSCATE_INDENTATION, INDENTATION_STRING)
-            if OBFUSCATE_COMMENTS:
+        for file_module in settings['file_modules']:
+            for layer, args in settings['obf_layers']:
+                layer(randomizer, *args).visit(file_module.tree)
+            out_code = unparse(file_module.tree, settings['indentation'])
+            if settings['comments']:
                 out_code = randomizer.generate_random_comments(out_code)
             prefix   = '#!/usr/bin/env python3\n# -*- coding: utf-8 -*-\n'
             post_fix = '\n# Obfuscated by *obfuspy* (Silas A. Kraume)\n'

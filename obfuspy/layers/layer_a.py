@@ -6,8 +6,8 @@ class Layer_A(ast.NodeTransformer):
     """
     Layer A obfuscates numerical constants in the AST.
     """
-    def __init__(self, _, numerical_denominator: int) -> None:
-        self.numerical_denominator = numerical_denominator
+    def __init__(self, _, numerical_denominator: str) -> None:
+        self.numerical_denominator = int(numerical_denominator)
 
     @functools.lru_cache(maxsize=1_000)
     def deconstruct_number(self, num: int) -> str:
