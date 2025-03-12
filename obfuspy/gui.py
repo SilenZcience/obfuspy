@@ -9,7 +9,8 @@ class ObfLayer:
 
     def __str__(self):
         settings = ','.join(f"{k}={v}" for k, v in self.settings.items())
-        return f"{self.name} ({settings})"
+        settings = f" ({settings})" if settings else ""
+        return f"{self.name}{settings}"
 
     def __repr__(self):
         return str(self)
@@ -80,6 +81,10 @@ class DragDropList(QListWidget):
 
 
 class DragDropWindow(QWidget):
+    """
+    Most likely an error occured if this text is visible within the description.
+    """
+
     def __init__(self, obfuscation_layers: dict):
         super().__init__()
         self.obfuscation_layers = obfuscation_layers
@@ -87,18 +92,41 @@ class DragDropWindow(QWidget):
         self.setGeometry(100, 100, 800, 600)
         self.setStyleSheet("background-color: #202020;")
 
-        # Main layout
         main_layout = QHBoxLayout(self)
 
-        # Create the drag-and-drop list widget
         left_panel = QVBoxLayout()
         self.list_widget = DragDropList()
         left_panel.addWidget(self.list_widget)
+        left_panel.addLayout(self.add_button_layout())
 
-        # Button layout
+        right_panel = QVBoxLayout()
+        settings_group = QGroupBox()
+        settings_group.setStyleSheet("""
+            QGroupBox {
+                color: white;
+                border: 1px solid #171717;
+                border-radius: 4px;
+                margin-top: 0;
+                padding-top: 10px;
+            }
+        """)
+        self.add_settings_layout(settings_group)
+        right_panel.addWidget(settings_group)
+        right_panel.addStretch()
+
+        main_layout.addLayout(left_panel, stretch=2)
+        main_layout.addLayout(right_panel, stretch=1)
+
+        steps = ["Step 1: Start", "Step 2: Process", "Step 3: Verify", "Step 4: Finish"]
+        for step in steps:
+            layer = ObfLayer(step, {"key": "value"})
+            item = QListWidgetItem(str(layer))
+            item.setData(Qt.UserRole, layer)
+            self.list_widget.addItem(item)
+
+    def add_button_layout(self) -> QHBoxLayout:
         button_layout = QHBoxLayout()
 
-        # Add buttons
         add_button = QPushButton("Duplicate Layer")
         add_button.clicked.connect(self.duplicate_selected)
         add_button.setStyleSheet("""
@@ -156,38 +184,24 @@ class DragDropWindow(QWidget):
         button_layout.addWidget(remove_button)
         button_layout.addWidget(import_button)
         button_layout.addWidget(export_button)
-        left_panel.addLayout(button_layout)
 
-        right_panel = QVBoxLayout()
+        return button_layout
 
-        # Settings group
-        settings_group = QGroupBox()
-        settings_group.setStyleSheet("""
-            QGroupBox {
-                color: white;
-                border: 1px solid #171717;
-                border-radius: 4px;
-                margin-top: 0;
-                padding-top: 10px;
-            }
-        """)
-        settings_layout = QVBoxLayout(settings_group)
-        settings_layout.setContentsMargins(10, 10, 10, 10)
-
-        # Style for all labels
+    def add_settings_layout(self, settings_group: QGroupBox) -> QVBoxLayout:
         label_style = """
             QLabel {
                 color: white;
                 padding-left: 2px;  /* Add left padding to labels */
             }
         """
+        settings_layout = QVBoxLayout(settings_group)
+        settings_layout.setContentsMargins(10, 10, 10, 10)
 
-        # Dropdown
         layer_label = QLabel("Layer:")
         layer_label.setStyleSheet(label_style)
         settings_layout.addWidget(layer_label)
         self.method_combo = QComboBox()
-        self.method_combo.addItems(obfuscation_layers.keys())
+        self.method_combo.addItems(self.obfuscation_layers.keys())
         self.method_combo.currentTextChanged.connect(self.on_layer_changed)
         self.method_combo.setStyleSheet("""
             QComboBox {
@@ -213,7 +227,6 @@ class DragDropWindow(QWidget):
         description_label = QLabel("Description:")
         description_label.setStyleSheet(label_style)
         settings_layout.addWidget(description_label)
-
         self.description_text = QTextEdit()
         self.description_text.setReadOnly(True)
         self.description_text.setMaximumHeight(100)
@@ -244,8 +257,8 @@ class DragDropWindow(QWidget):
         """)
         self.optional_widgets['Numerical Constants'] = (denominator_label, denominator_spin)
 
-        dead_code_label = QLabel("Anti-Debug Statement Probability")
-        dead_code_label.setStyleSheet(label_style)
+        anti_debug_label = QLabel("Anti-Debug Statement Probability")
+        anti_debug_label.setStyleSheet(label_style)
         anti_debug_spin = QDoubleSpinBox()
         anti_debug_spin.setRange(0.0, 1.0)
         anti_debug_spin.setValue(0.2)
@@ -260,7 +273,7 @@ class DragDropWindow(QWidget):
                 border-radius: 4px;
             }
         """)
-        self.optional_widgets['Anti-Debug Statements'] = (dead_code_label, anti_debug_spin)
+        self.optional_widgets['Anti-Debug Statements'] = (anti_debug_label, anti_debug_spin)
 
         dead_code_label = QLabel("Dead Code Probability")
         dead_code_label.setStyleSheet(label_style)
@@ -286,7 +299,6 @@ class DragDropWindow(QWidget):
                 settings_layout.addWidget(widget)
         self.on_layer_changed()
 
-        # Action buttons
         action_button = QPushButton("Add Layer")
         action_button.clicked.connect(self.add_new_step)
         action_button.setStyleSheet("""
@@ -303,21 +315,14 @@ class DragDropWindow(QWidget):
         """)
         settings_layout.addWidget(action_button)
 
-        # Add the panels to main layout
-        main_layout.addLayout(left_panel, stretch=2)
-        right_panel.addWidget(settings_group)
-        right_panel.addStretch()
-        main_layout.addLayout(right_panel, stretch=1)
-
-        # Add initial steps
-        steps = ["Step 1: Start", "Step 2: Process", "Step 3: Verify", "Step 4: Finish"]
-        for step in steps:
-            layer = ObfLayer(step, {"key": "value"})
-            item = QListWidgetItem(str(layer))
-            item.setData(Qt.UserRole, layer)
-            self.list_widget.addItem(item)
+        return settings_layout
 
     def on_layer_changed(self):
+        def clean_doc_text(text):
+            text = text.replace('\t', '')
+            while '\n  ' in text:
+                text = text.replace('\n  ', '\n ')
+            return f" {text.strip()}"
         layer_name = self.method_combo.currentText()
         for label, *widgets in self.optional_widgets.values():
             label.hide()
@@ -328,7 +333,7 @@ class DragDropWindow(QWidget):
             label.show()
             for widget in widgets:
                 widget.show()
-        self.description_text.setText(self.obfuscation_layers[layer_name].__doc__)
+        self.description_text.setText(clean_doc_text(self.obfuscation_layers.get(layer_name, self).__doc__))
 
     def add_new_step(self):
         def clean_label_text(text):
@@ -347,11 +352,6 @@ class DragDropWindow(QWidget):
         item.setData(Qt.UserRole, layer)
         self.list_widget.addItem(item)
 
-    def remove_selected(self):
-        current_item = self.list_widget.selectedItems()
-        if current_item:
-            self.list_widget.takeItem(self.list_widget.row(current_item[0]))
-
     def duplicate_selected(self):
         current_item = self.list_widget.selectedItems()
         if current_item:
@@ -363,6 +363,11 @@ class DragDropWindow(QWidget):
                 self.list_widget.row(current_item[0])+1,
                 item
             )
+
+    def remove_selected(self):
+        current_item = self.list_widget.selectedItems()
+        if current_item:
+            self.list_widget.takeItem(self.list_widget.row(current_item[0]))
 
     def print_order(self):
         current_order = self.list_widget.get_items_order()
@@ -377,13 +382,13 @@ class GUI:
         self.app = QApplication([])
         self.window = DragDropWindow(obfuscation_layers)
 
-    def start(self):
+    def run(self):
         self.window.show()
         self.app.exec()
         return {
             "layers": [l.data(Qt.UserRole) for l in self.window.list_widget.get_items_order()],
             "comments": True,
-            "indentation": True,
+            "indentation": '    ',
         }
 
 if __name__ == "__main__":
