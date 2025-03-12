@@ -80,8 +80,9 @@ class DragDropList(QListWidget):
 
 
 class DragDropWindow(QWidget):
-    def __init__(self, obfuscation_layers: list):
+    def __init__(self, obfuscation_layers: dict):
         super().__init__()
+        self.obfuscation_layers = obfuscation_layers
         self.setWindowTitle("obfuspy - Silas A. Kraume")
         self.setGeometry(100, 100, 800, 600)
         self.setStyleSheet("background-color: #202020;")
@@ -124,9 +125,22 @@ class DragDropWindow(QWidget):
                 background-color: #C0392B;
             }
         """)
-        print_button = QPushButton("Print Order")
-        print_button.clicked.connect(self.print_order)
-        print_button.setStyleSheet("""
+        import_button = QPushButton("Import")
+        import_button.clicked.connect(self.print_order)
+        import_button.setStyleSheet("""
+            QPushButton {
+                background-color: #3498DB;
+                color: #202020;
+                padding: 8px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #2980B9;
+            }
+        """)
+        export_button = QPushButton("Export")
+        export_button.clicked.connect(self.print_order)
+        export_button.setStyleSheet("""
             QPushButton {
                 background-color: #3498DB;
                 color: #202020;
@@ -140,7 +154,8 @@ class DragDropWindow(QWidget):
 
         button_layout.addWidget(add_button)
         button_layout.addWidget(remove_button)
-        button_layout.addWidget(print_button)
+        button_layout.addWidget(import_button)
+        button_layout.addWidget(export_button)
         left_panel.addLayout(button_layout)
 
         right_panel = QVBoxLayout()
@@ -172,7 +187,7 @@ class DragDropWindow(QWidget):
         layer_label.setStyleSheet(label_style)
         settings_layout.addWidget(layer_label)
         self.method_combo = QComboBox()
-        self.method_combo.addItems(obfuscation_layers)
+        self.method_combo.addItems(obfuscation_layers.keys())
         self.method_combo.currentTextChanged.connect(self.on_layer_changed)
         self.method_combo.setStyleSheet("""
             QComboBox {
@@ -194,6 +209,23 @@ class DragDropWindow(QWidget):
             }
         """)
         settings_layout.addWidget(self.method_combo)
+
+        description_label = QLabel("Description:")
+        description_label.setStyleSheet(label_style)
+        settings_layout.addWidget(description_label)
+
+        self.description_text = QTextEdit()
+        self.description_text.setReadOnly(True)
+        self.description_text.setMaximumHeight(100)
+        self.description_text.setStyleSheet("""
+            QTextEdit {
+                background-color: #2b2b2b;
+                color: white;
+                border: 1px solid #171717;
+                border-radius: 4px;
+            }
+        """)
+        settings_layout.addWidget(self.description_text)
 
         self.optional_widgets = {}
         denominator_label = QLabel("Denominator:")
@@ -296,6 +328,7 @@ class DragDropWindow(QWidget):
             label.show()
             for widget in widgets:
                 widget.show()
+        self.description_text.setText(self.obfuscation_layers[layer_name].__doc__)
 
     def add_new_step(self):
         def clean_label_text(text):
@@ -340,12 +373,18 @@ class DragDropWindow(QWidget):
 
 
 class GUI:
-    def __init__(self, obfuscation_layers: list):
+    def __init__(self, obfuscation_layers: dict):
         self.app = QApplication([])
         self.window = DragDropWindow(obfuscation_layers)
+
+    def start(self):
         self.window.show()
         self.app.exec()
-
+        return {
+            "layers": [l.data(Qt.UserRole) for l in self.window.list_widget.get_items_order()],
+            "comments": True,
+            "indentation": True,
+        }
 
 if __name__ == "__main__":
     GUI()

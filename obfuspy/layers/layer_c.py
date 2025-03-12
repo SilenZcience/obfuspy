@@ -19,7 +19,7 @@ class Layer_C(ast.NodeTransformer):
         node.body.insert(0, ast.Expr(
             value=ast.Constant(
                 value='\n'.join([
-                    next(self.randomizer.random_cmmt_gen)
+                    next(self.randomizer.random_name_gen)
                     for _ in range(random.randint(3, 6))
                 ])
             )
@@ -35,7 +35,7 @@ class Layer_C(ast.NodeTransformer):
         node.body.insert(0, ast.Expr(
             value=ast.Constant(
                 value='\n'.join([
-                    next(self.randomizer.random_cmmt_gen)
+                    next(self.randomizer.random_name_gen)
                     for _ in range(random.randint(3, 6))
                 ])
             )
@@ -51,7 +51,7 @@ class Layer_C(ast.NodeTransformer):
         node.body.insert(0, ast.Expr(
             value=ast.Constant(
                 value='\n'.join([
-                    next(self.randomizer.random_cmmt_gen)
+                    next(self.randomizer.random_name_gen)
                     for _ in range(random.randint(3, 6))
                 ])
             )
@@ -67,7 +67,7 @@ class Layer_C(ast.NodeTransformer):
         node.body.insert(0, ast.Expr(
             value=ast.Constant(
                 value='\n'.join([
-                    next(self.randomizer.random_cmmt_gen)
+                    next(self.randomizer.random_name_gen)
                     for _ in range(random.randint(3, 6))
                 ])
             )

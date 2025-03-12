@@ -59,7 +59,7 @@ def acc_py_files(arg_paths) -> set:
     return file_modules
 
 def main():
-    GUI(list(OBFUSCATION_LAYERS.keys()))
+    print(GUI(OBFUSCATION_LAYERS).start())
     return
     args = parseArgs()
     # print("DEBUG: ARGS:", args)

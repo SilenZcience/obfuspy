@@ -1,6 +1,7 @@
 
 
 import builtins
+from functools import lru_cache
 import itertools
 import keyword
 import random
@@ -22,21 +23,22 @@ ALL_KEYWORDS = set(keyword.kwlist + keyword.softkwlist)
 class Randomizer:
     def __init__(self) -> None:
         self.random_name_gen = None
-        self.random_cmmt_gen = None
         self.random_str_name = 'deobfuscate_string'
         self.random_str_key  = random.randint(1_000, 999_999)
 
-    def set_name_data(self, n: int, char_set: list = None) -> None:
-        self.random_name_gen = Randomizer._random_name_gen(n, char_set)
+    def set_random_gen(self, n: int, char_set: list = None) -> None:
+        self.random_name_gen = Randomizer.create_random_generator(n, char_set)
         self.random_str_name = next(self.random_name_gen)
-
-    def set_cmmt_data(self, n: int, char_set: list = None) -> None:
-        self.random_cmmt_gen = Randomizer._random_name_gen(n, char_set)
 
     def randomize_string(self) -> None:
         self.random_str_name = next(self.random_name_gen)
         self.random_str_key = random.randint(1_000, 999_999)
 
+
+    @staticmethod
+    @lru_cache(maxsize=None)
+    def create_random_generator(n: int, char_set: list = None):
+        return Randomizer._random_name_gen(n, char_set)
 
     @staticmethod
     def _random_name_gen(n: int, char_set: list = None):
@@ -70,7 +72,7 @@ class Randomizer:
         lines = code.split('\n')
         for i, _ in enumerate(lines):
             if lines[i].strip():
-                lines[i] += f"#{next(self.random_cmmt_gen)}"
+                lines[i] += f"#{next(self.random_name_gen)}"
             else:
                 lines[i] = f"#{random.choice(lines)}"
         return '\n'.join(lines)

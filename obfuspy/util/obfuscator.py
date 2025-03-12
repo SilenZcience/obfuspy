@@ -54,7 +54,7 @@ class Obfuscator:
     def obfuscate(file_modules: set) -> None:
         randomizer = Randomizer()
         randomizer.set_cmmt_data(COMMENT_LENGTH,  COMMENT_CHARSET )
-        randomizer.set_name_data(VARIABLE_LENGTH, VARIABLE_CHARSET)
+        randomizer.set_random_gen(VARIABLE_LENGTH, VARIABLE_CHARSET)
 
         layer_a = Layer_A(randomizer, NUMERICAL_DENOMINATOR)
         layer_b = Layer_B(randomizer)
