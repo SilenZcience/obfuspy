@@ -63,6 +63,8 @@ def main():
     file_modules = acc_py_files(parser.parse_args().PATH)
     # TODO: if no files? maybe GUI fileselectdialog
     settings: dict = GUI(OBFUSCATION_LAYERS).run()
+    if settings is None:
+        return
     settings['file_modules'] = file_modules
     settings['obf_layers'] = [(OBFUSCATION_LAYERS[l.name], l.settings.values()) for l in settings['layers']]
     # return

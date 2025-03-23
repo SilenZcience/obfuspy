@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Qt
+from PySide6.QtGui import *
+from PySide6.QtCore import *
 
 
 class ObfLayer:
@@ -9,7 +10,7 @@ class ObfLayer:
 
     def __str__(self):
         settings = ','.join(f"{k}={v}" for k, v in self.settings.items())
-        settings = f" ({settings})" if settings else ""
+        settings = f" ({settings})" if settings else ''
         return f"{self.name}{settings}"
 
     def __repr__(self):
@@ -88,9 +89,10 @@ class DragDropWindow(QWidget):
     def __init__(self, obfuscation_layers: dict):
         super().__init__()
         self.obfuscation_layers = obfuscation_layers
-        self.setWindowTitle("obfuspy - Silas A. Kraume")
+        self.setWindowTitle('obfuspy - Silas A. Kraume')
         self.setGeometry(100, 100, 800, 600)
-        self.setStyleSheet("background-color: #202020;")
+        self.setStyleSheet('background-color: #202020;')
+        self.do_obfuscation = False
 
         main_layout = QHBoxLayout(self)
 
@@ -113,6 +115,7 @@ class DragDropWindow(QWidget):
         self.add_settings_layout(settings_group)
         right_panel.addWidget(settings_group)
         right_panel.addStretch()
+        right_panel.addLayout(self.add_finish_layout())
 
         main_layout.addLayout(left_panel, stretch=2)
         main_layout.addLayout(right_panel, stretch=1)
@@ -317,6 +320,58 @@ class DragDropWindow(QWidget):
 
         return settings_layout
 
+    def add_finish_layout(self) -> QVBoxLayout:
+        bottom_controls = QVBoxLayout()
+        self.comment_length_input = QSpinBox()
+        self.comment_length_input.setRange(-1, 1000)
+        self.comment_length_input.setValue(-1)
+        self.comment_length_input.setStyleSheet("""
+            QSpinBox {
+                background-color: #2b2b2b;
+                color: white;
+                padding: 5px;
+                border: 1px solid #171717;
+                border-radius: 4px;
+            }
+        """)
+        self.comment_length_input.setPrefix('Comment Length: ')
+
+        self.indentation_input = QLineEdit()
+        self.indentation_input.setText('')
+        self.indentation_input.setStyleSheet("""
+            QLineEdit {
+                background-color: #2b2b2b;
+                color: white;
+                padding: 5px;
+                border: 1px solid #171717;
+                border-radius: 4px;
+            }
+        """)
+        self.indentation_input.setPlaceholderText('Indentation (default: 4 spaces)')
+        regex = QRegularExpression(r"^( |\\t)*$")
+        validator = QRegularExpressionValidator(regex, self.indentation_input)
+        self.indentation_input.setValidator(validator)
+
+        start_button = QPushButton('Start Obfuscation')
+        start_button.clicked.connect(self.start_obfuscation)
+        start_button.setStyleSheet("""
+            QPushButton {
+                background-color: #00ff00;
+                color: #202020;
+                padding: 8px 20px;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #15e304;
+            }
+        """)
+
+        bottom_controls.addWidget(self.comment_length_input)
+        bottom_controls.addWidget(self.indentation_input)
+        bottom_controls.addWidget(start_button)
+
+        return bottom_controls
+
     def on_layer_changed(self):
         def clean_doc_text(text):
             text = text.replace('\t', '')
@@ -346,7 +401,7 @@ class DragDropWindow(QWidget):
                 if isinstance(widget,(QSpinBox, QDoubleSpinBox)):
                     additional_data[clean_label_text(label.text())] = widget.value()
                 else:
-                    print("Unknown widget type", type(widget))
+                    print('Unknown widget type', type(widget))
         layer = ObfLayer(current_item, additional_data)
         item = QListWidgetItem(str(layer))
         item.setData(Qt.UserRole, layer)
@@ -371,10 +426,13 @@ class DragDropWindow(QWidget):
 
     def print_order(self):
         current_order = self.list_widget.get_items_order()
-        print("Current order of steps:")
+        print('Current order of steps:')
         for i, step in enumerate(current_order, 1):
             print(f"{i}. {step.data(Qt.UserRole)}")
 
+    def start_obfuscation(self):
+        self.do_obfuscation = True
+        self.close()
 
 
 class GUI:
@@ -386,10 +444,7 @@ class GUI:
         self.window.show()
         self.app.exec()
         return {
-            "layers": [l.data(Qt.UserRole) for l in self.window.list_widget.get_items_order()],
-            "comments": True,
-            "indentation": '    ',
-        }
-
-if __name__ == "__main__":
-    GUI()
+            'layers': [l.data(Qt.UserRole) for l in self.window.list_widget.get_items_order()],
+            'comments': self.window.comment_length_input.value(),
+            'indentation': self.window.indentation_input.text().replace('\\t', '\t') or '    ',
+        } if self.window.do_obfuscation else None
