@@ -6,7 +6,7 @@ class Layer_E(ast.NodeTransformer):
     """
     Layer E obfuscates annotations in function definitions and assignments in the AST.
     """
-    def __init__(self, _) -> None:
+    def __init__(self, _, __) -> None:
         pass
 
     def random_annotation(self) -> list:

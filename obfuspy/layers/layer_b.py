@@ -32,7 +32,7 @@ class Layer_B(ast.NodeTransformer):
     """
     Layer B obfuscates string constants in the AST.
     """
-    def __init__(self, randomizer: Randomizer) -> None:
+    def __init__(self, randomizer: Randomizer, _) -> None:
         self.randomizer = randomizer
 
     def visit_Module(self, node):

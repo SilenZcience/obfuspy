@@ -7,7 +7,7 @@ class Layer_C(ast.NodeTransformer):
     """
     Layer C obfuscates docstrings in the AST.
     """
-    def __init__(self, randomizer: Randomizer) -> None:
+    def __init__(self, randomizer: Randomizer, _) -> None:
         self.randomizer = randomizer
 
     def visit_Module(self, node):
