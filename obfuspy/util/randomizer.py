@@ -3,20 +3,69 @@
 import builtins
 from functools import lru_cache
 import itertools
+import json
 import keyword
 import random
 import string
+import subprocess
+import sys
 
 
-BUILTINS_DEFAULT = set(f for f in dir(builtins) if not f.startswith('_'))
-BUILTINS_DUNDER = set(f for f in dir(builtins) if f.startswith('_'))
-# BUILTINS_DUNDER.update({
-#     '__annotations__',
-#     '__file__',
-#     '__path__',
-# })
+def _load_clean_builtins_default() -> set:
+    code = (
+        "import builtins, json;"
+        "print(json.dumps(sorted(k for k in builtins.__dict__.keys() if not k.startswith('_'))))"
+    )
+    try:
+        proc = subprocess.run(
+            [sys.executable, '-I', '-S', '-c', code],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return set(json.loads(proc.stdout))
+    except Exception:
+        # Fallback: best effort from current runtime if isolated subprocess is unavailable.
+        return set(f for f in dir(builtins) if not f.startswith('_'))
+
+
+BUILTINS_DEFAULT = _load_clean_builtins_default()
+# `dir(builtins)` can be polluted at runtime (debuggers, sitecustomize, REPL tools).
+# Keep only stable dunder builtins that are part of normal Python execution.
+BUILTINS_DUNDER = {
+    '__build_class__',
+    '__import__',
+}
 KEYWORDS_VAL = {'True', 'False', 'None'}
-ALL_BUILTINS = BUILTINS_DEFAULT | BUILTINS_DUNDER | KEYWORDS_VAL
+UNSAFE_BUILTINS = {
+    'super',
+    '__build_class__',
+    '__import__',
+    'globals',
+    'locals',
+    'vars',
+    'dir',
+    'getattr',
+    'setattr',
+    'delattr',
+    'hasattr',
+    'eval',
+    'exec',
+    'compile',
+    'type',
+    'object',
+    'isinstance',
+    'issubclass',
+    'property',
+    'classmethod',
+    'staticmethod',
+    'True',
+    'False',
+    'None',
+    'Ellipsis',
+    'NotImplemented',
+}
+ALL_BUILTINS = BUILTINS_DEFAULT | BUILTINS_DUNDER | KEYWORDS_VAL - UNSAFE_BUILTINS
 ALL_KEYWORDS = set(keyword.kwlist + keyword.softkwlist)
 
 
@@ -68,6 +117,7 @@ class Randomizer:
 
 
     def generate_random_comments(self, code: str) -> str:
+        # TODO: fix length usage, also duplicates allowed so limit to set length ONLY!
         lines = code.split('\n')
         for i, _ in enumerate(lines):
             if lines[i].strip():
