@@ -1,12 +1,13 @@
 import ast
 import functools
+import random
 
 
 class Layer_A(ast.NodeTransformer):
     """
     Layer A obfuscates numerical constants in the AST.
     """
-    def __init__(self, _, numerical_denominator: str) -> None:
+    def __init__(self, _, __, numerical_denominator: str) -> None:
         self.numerical_denominator = int(numerical_denominator)
 
     @functools.lru_cache(maxsize=1_000)
@@ -33,7 +34,8 @@ class Layer_A(ast.NodeTransformer):
             return ast.parse(expr_str, mode='eval').body
         if isinstance(node.value, float):
             if node.value == 0:
-                expr_str = '(1.0-1.0)'
+                random_int = random.randint(1, 999_999_999)
+                expr_str = f"({random_int}^{random_int})"
             else:
                 int_part = int(node.value)
                 decimal_part = node.value - int_part
