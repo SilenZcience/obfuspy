@@ -6,7 +6,7 @@ class Layer_H(ast.NodeTransformer):
     """
     Layer H obfuscates builtins in the AST.
     """
-    def __init__(self, randomizer: Randomizer) -> None:
+    def __init__(self, randomizer: Randomizer, _) -> None:
         self.randomizer = randomizer
         self.builtin_map = {b: next(self.randomizer.random_name_gen) for b in ALL_BUILTINS}
 
@@ -73,6 +73,6 @@ class Layer_H(ast.NodeTransformer):
         #     parent.func.id in ('TypeVar', 'NewType'))
         # ):
         #     return node
-        if isinstance(node.value, (bool, type(None))):
+        if isinstance(node.value, (bool, type(None))) and str(node.value) in self.builtin_map:
             return ast.Name(id=self.builtin_map[str(node.value)], ctx=ast.Load())
         return node
