@@ -7,7 +7,7 @@ class Layer_G(ast.NodeTransformer):
     """
     Layer G inserts dead code into the AST.
     """
-    def __init__(self, randomizer: Randomizer, probability: float) -> None:
+    def __init__(self, randomizer: Randomizer, _, probability: float) -> None:
         self.randomizer = randomizer
         self.probability = probability
 
@@ -85,8 +85,20 @@ class Layer_G(ast.NodeTransformer):
             self.dead_expressions(),
         ])
 
+    @staticmethod
+    def _insert_start_for_docstring(body: list) -> int:
+        if (
+            body and
+            isinstance(body[0], ast.Expr) and
+            isinstance(body[0].value, ast.Constant) and
+            isinstance(body[0].value.value, str)
+        ):
+            return 1
+        return 0
+
     def visit_Module(self, node):
-        positions = range(len(node.body) + 1)
+        insert_start = self._insert_start_for_docstring(node.body)
+        positions = range(insert_start, len(node.body) + 1)
         insert_count = int(len(positions) * self.probability)
         for i in sorted(random.sample(positions, insert_count), reverse=True):
             node.body.insert(i, self.dead_code())
@@ -94,7 +106,8 @@ class Layer_G(ast.NodeTransformer):
         return node
 
     def visit_ClassDef(self, node):
-        positions = range(len(node.body) + 1)
+        insert_start = self._insert_start_for_docstring(node.body)
+        positions = range(insert_start, len(node.body) + 1)
         insert_count = int(len(positions) * self.probability)
         for i in sorted(random.sample(positions, insert_count), reverse=True):
             node.body.insert(i, self.dead_functions())
@@ -102,7 +115,8 @@ class Layer_G(ast.NodeTransformer):
         return node
 
     def visit_FunctionDef(self, node):
-        positions = range(len(node.body) + 1)
+        insert_start = self._insert_start_for_docstring(node.body)
+        positions = range(insert_start, len(node.body) + 1)
         insert_count = int(len(positions) * self.probability)
         for i in sorted(random.sample(positions, insert_count), reverse=True):
             node.body.insert(i, self.dead_expressions())
@@ -110,7 +124,8 @@ class Layer_G(ast.NodeTransformer):
         return node
 
     def visit_AsyncFunctionDef(self, node):
-        positions = range(len(node.body) + 1)
+        insert_start = self._insert_start_for_docstring(node.body)
+        positions = range(insert_start, len(node.body) + 1)
         insert_count = int(len(positions) * self.probability)
         for i in sorted(random.sample(positions, insert_count), reverse=True):
             node.body.insert(i, self.dead_expressions())
