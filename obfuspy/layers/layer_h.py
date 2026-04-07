@@ -10,24 +10,18 @@ class Layer_H(ast.NodeTransformer):
         self.randomizer = randomizer
         self.builtin_map = {b: next(self.randomizer.random_name_gen) for b in ALL_BUILTINS}
 
-    def builtin_code(self) -> list:
-        return ast.Assign(
-            targets=[ast.Tuple(
-                elts=[ast.Name(id=self.builtin_map[b], ctx=ast.Store()) for b in ALL_BUILTINS],
-                ctx=ast.Store()
-            )],
-            value=ast.Tuple(
-                elts=[ast.Name(id=b, ctx=ast.Load()) for b in ALL_BUILTINS],
-                ctx=ast.Load()
-            ),
-            lineno=0,
-            col_offset=0
+    def builtin_code(self, lineno=1):
+        value = ','.join(map(str, self.builtin_map.values()))
+        value += '='
+        value += ','.join(map(str, self.builtin_map.keys()))
+        node = ast.Expr(
+            value=ast.Call(
+                func=ast.Name(id='exec', ctx=ast.Load()),
+                args=[ast.Constant(value=value)],
+                keywords=[]
+            )
         )
-
-    # def visit(self, node):
-    #     for child in ast.iter_child_nodes(node):
-    #         setattr(child, '_parent', node)
-    #     return super().visit(node)
+        return node
 
     def visit_Module(self, node):
         doc_string = None
