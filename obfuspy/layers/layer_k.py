@@ -116,7 +116,7 @@ class Layer_K(ast.NodeTransformer):
         if class_ctx is not None and isinstance(node.value, ast.Name):
             current_class_name = class_ctx['name']
             current_method_map = class_ctx['method_map']
-            if node.value.id in {"self", "cls", current_class_name} and node.attr in current_method_map:
+            if node.value.id in {'self', 'cls', current_class_name} and node.attr in current_method_map:
                 node.attr = current_method_map[node.attr]
         self.generic_visit(node)
         return node

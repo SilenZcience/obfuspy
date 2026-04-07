@@ -66,8 +66,8 @@ def acc_py_files(arg_paths) -> set:
 
 def main():
     parser = argparse.ArgumentParser(description='obfuscate a python file/module.')
-    parser.add_argument("PATH", action="store", default=None,
-                        nargs="+", help="FILE(s) and/or FOLDER(s) to obfuscate")
+    parser.add_argument('PATH', action='store', default=None,
+                        nargs='+', help='FILE(s) and/or FOLDER(s) to obfuscate')
     file_modules = acc_py_files(parser.parse_args().PATH)
     # TODO: if no files? maybe GUI fileselectdialog
     settings: dict = GUI(OBFUSCATION_LAYERS).run()
