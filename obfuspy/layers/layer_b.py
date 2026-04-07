@@ -1,5 +1,21 @@
 import ast
+import random
 from obfuspy.util.randomizer import Randomizer
+
+
+def unicode_compress(bytes):
+    o = bytearray()
+    for c in bytes:
+        if c < 32 or c > 126:
+            raise ValueError
+        # Code point translation
+        v = (c-11)%133-21
+        o += ((v >> 6) & 1 | 0b11001100).to_bytes(1,'big')
+        o += ((v & 63) | 0b10000000).to_bytes(1,'big')
+    return o
+
+def unicode_decompress(b):
+    return str().join(chr(((h<<6&64|c&63)+22)%133+10) for h,c in zip(*(iter(b),)*2))
 
 
 class StringUsageFinder(ast.NodeVisitor):
@@ -34,9 +50,9 @@ class Layer_B(ast.NodeTransformer):
     """
     def __init__(self, randomizer: Randomizer, _) -> None:
         self.randomizer = randomizer
+        self.random_str_name = next(randomizer.random_name_gen)
 
     def visit_Module(self, node):
-        self.randomizer.randomize_string()
         doc_string = None
         if (node.body and isinstance(node.body[0], ast.Expr) and
             isinstance(node.body[0].value, ast.Constant) and
@@ -50,7 +66,7 @@ class Layer_B(ast.NodeTransformer):
                 insert_position = i
                 break
         node.body[insert_position:insert_position] = ast.parse(
-            f"{self.randomizer.random_str_name}=lambda s: str().join(chr(ord(c)^{self.randomizer.random_str_key}) for c in s)"
+            f"{self.random_str_name}=lambda s: str().join(chr(ord(c)^((ord(s[0])^(i*31))&0xff)) for i,c in enumerate(s[1:]))"
         ).body
         self.generic_visit(node)
         if doc_string:
@@ -110,13 +126,34 @@ class Layer_B(ast.NodeTransformer):
             keywords=[]
         )
 
+    def generate_obfuscated_ast_node(self, s: str):
+        key = sum(map(ord, s)) & 0xff
+        value = chr(key) + ''.join(
+            chr(ord(c) ^ ((key ^ (i * 31)) & 0xff))
+            for i, c in enumerate(s)
+        )
+        return ast.Call(
+            func=ast.Name(id=self.random_str_name, ctx=ast.Load()),
+            args=[ast.Constant(
+                value=value
+            )],
+            keywords=[],
+        )
+
+    def generate_compressed_logic(self, s: str):
+        compressed = unicode_compress(s.encode('utf-8'))
+        decompressed = unicode_decompress(compressed)
+        if decompressed != s:
+            raise ValueError
+        return ast.parse(f"str().join(chr(((h<<6&64|c&63)+22)%133+10) for h,c in zip(*(iter({compressed!r}),)*2))", mode='eval').body
+
     def visit_Constant(self, node):
         if isinstance(node.value, str):
-            return ast.Call(
-                func=ast.Name(id=self.randomizer.random_str_name, ctx=ast.Load()),
-                args=[ast.Constant(
-                    value=''.join(chr(ord(c) ^ self.randomizer.random_str_key) for c in node.value)
-                )],
-                keywords=[],
-            )
+            if random.random() < 0.7:
+                return self.generate_obfuscated_ast_node(node.value)
+            try:
+                return self.generate_compressed_logic(node.value)
+            except ValueError:
+                return self.generate_obfuscated_ast_node(node.value)
+
         return node
