@@ -324,7 +324,10 @@ class Obfuscator:
     @staticmethod
     def obfuscate(settings: dict) -> None:
         randomizer = Randomizer()
-        randomizer.set_random_gen(10, CHARSETS[0])
+        n = settings.get('random_name_length', 10)
+        charset_idx = settings.get('random_charset_index', 0)
+        charset = CHARSETS[charset_idx] if 0 <= charset_idx < len(CHARSETS) else CHARSETS[0]
+        randomizer.set_random_gen(n, charset)
 
         file_modules = sorted(settings['file_modules'], key=lambda file_module: file_module.in_path)
 

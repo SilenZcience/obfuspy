@@ -4,6 +4,8 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import *
 from PySide6.QtCore import *
 
+from obfuspy.util.charsets import CHARSETS
+
 
 class ObfLayer:
     def __init__(self, name: str, settings: dict):
@@ -126,7 +128,7 @@ class DragDropWindow(QWidget):
     def add_button_layout(self) -> QHBoxLayout:
         button_layout = QHBoxLayout()
 
-        add_button = QPushButton("Duplicate Layer")
+        add_button = QPushButton('Duplicate Layer')
         add_button.clicked.connect(self.duplicate_selected)
         add_button.setStyleSheet("""
             QPushButton {
@@ -139,7 +141,7 @@ class DragDropWindow(QWidget):
                 background-color: #15e304;
             }
         """)
-        remove_button = QPushButton("Remove Layer")
+        remove_button = QPushButton('Remove Layer')
         remove_button.clicked.connect(self.remove_selected)
         remove_button.setStyleSheet("""
             QPushButton {
@@ -152,7 +154,7 @@ class DragDropWindow(QWidget):
                 background-color: #C0392B;
             }
         """)
-        import_button = QPushButton("Import")
+        import_button = QPushButton('Import')
         import_button.clicked.connect(self.import_layout)
         import_button.setStyleSheet("""
             QPushButton {
@@ -165,7 +167,7 @@ class DragDropWindow(QWidget):
                 background-color: #2980B9;
             }
         """)
-        export_button = QPushButton("Export")
+        export_button = QPushButton('Export')
         export_button.clicked.connect(self.export_layout)
         export_button.setStyleSheet("""
             QPushButton {
@@ -196,7 +198,7 @@ class DragDropWindow(QWidget):
         settings_layout = QVBoxLayout(settings_group)
         settings_layout.setContentsMargins(10, 10, 10, 10)
 
-        layer_label = QLabel("Layer:")
+        layer_label = QLabel('Layer:')
         layer_label.setStyleSheet(label_style)
         settings_layout.addWidget(layer_label)
         self.method_combo = QComboBox()
@@ -223,7 +225,7 @@ class DragDropWindow(QWidget):
         """)
         settings_layout.addWidget(self.method_combo)
 
-        description_label = QLabel("Description:")
+        description_label = QLabel('Description:')
         description_label.setStyleSheet(label_style)
         settings_layout.addWidget(description_label)
         self.description_text = QTextEdit()
@@ -253,7 +255,7 @@ class DragDropWindow(QWidget):
                 border: 1px solid #2a2a2a;
             }
         """
-        denominator_label = QLabel("Denominator:")
+        denominator_label = QLabel('Denominator:')
         denominator_label.setStyleSheet(label_style)
         denominator_spin = QSpinBox()
         denominator_spin.setRange(2, 100)
@@ -262,7 +264,7 @@ class DragDropWindow(QWidget):
         denominator_spin.setStyleSheet(spin_box_style)
         self.optional_widgets['Numerical Constants'] = (denominator_label, denominator_spin)
 
-        anti_debug_label = QLabel("Anti-Debug Statement Probability")
+        anti_debug_label = QLabel('Anti-Debug Statement Probability')
         anti_debug_label.setStyleSheet(label_style)
         anti_debug_spin = QDoubleSpinBox()
         anti_debug_spin.setRange(0.0, 1.0)
@@ -273,7 +275,7 @@ class DragDropWindow(QWidget):
         anti_debug_spin.setStyleSheet(spin_box_style)
         self.optional_widgets['Anti-Debug Statements'] = (anti_debug_label, anti_debug_spin)
 
-        dead_code_label = QLabel("Dead Code Probability")
+        dead_code_label = QLabel('Dead Code Probability')
         dead_code_label.setStyleSheet(label_style)
         dead_code_spin = QDoubleSpinBox()
         dead_code_spin.setRange(0.0, 1.0)
@@ -290,7 +292,7 @@ class DragDropWindow(QWidget):
                 settings_layout.addWidget(widget)
         self.on_layer_changed()
 
-        action_button = QPushButton("Add Layer")
+        action_button = QPushButton('Add Layer')
         action_button.clicked.connect(self.add_new_step)
         action_button.setStyleSheet("""
             QPushButton {
@@ -323,6 +325,30 @@ class DragDropWindow(QWidget):
                 border: 1px solid #2a2a2a;
             }
         """
+
+        self.random_name_length_input = QSpinBox()
+        self.random_name_length_input.setRange(1, 128)
+        self.random_name_length_input.setValue(10)
+        self.random_name_length_input.setButtonSymbols(QAbstractSpinBox.PlusMinus)
+        self.random_name_length_input.setStyleSheet(spin_box_style)
+        self.random_name_length_input.setPrefix('Name Length: ')
+
+        self.charset_combo = QComboBox()
+        for i, charset in enumerate(CHARSETS):
+            preview = charset[:10] + ('...' if len(charset) > 10 else '')
+            self.charset_combo.addItem(f"  Charset {i+1}: {preview}")
+        self.charset_combo.currentTextChanged.connect(self.charset_preview)
+        self.charset_combo.setCurrentIndex(0)
+        self.charset_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #2b2b2b;
+                color: white;
+                padding: 5px;
+                border: 1px solid #171717;
+                border-radius: 4px;
+            }
+        """)
+
         self.comment_length_input = QSpinBox()
         self.comment_length_input.setRange(-1, 1000)
         self.comment_length_input.setValue(-1)
@@ -360,11 +386,19 @@ class DragDropWindow(QWidget):
             }
         """)
 
+        bottom_controls.addWidget(self.random_name_length_input)
+        bottom_controls.addWidget(self.charset_combo)
         bottom_controls.addWidget(self.comment_length_input)
         bottom_controls.addWidget(self.indentation_input)
         bottom_controls.addWidget(start_button)
 
         return bottom_controls
+
+    def charset_preview(self):
+        idx = self.charset_combo.currentIndex()
+        charset = CHARSETS[idx]
+        preview = charset[:10] + ('...' if len(charset) > 10 else '')
+        print('---Charset Preview---\n', f"Charset {idx+1}: {preview}", sep='')
 
     def on_layer_changed(self):
         def clean_doc_text(text):
@@ -437,6 +471,8 @@ class DragDropWindow(QWidget):
             'layers': layers,
             'comments': self.comment_length_input.value(),
             'indentation': self.indentation_input.text().replace('\\t', '\t') or '    ',
+            'random_name_length': self.random_name_length_input.value(),
+            'random_charset_index': self.charset_combo.currentIndex(),
         }
 
     def _deserialize_state(self, state: dict) -> None:
@@ -471,6 +507,15 @@ class DragDropWindow(QWidget):
         indentation = state.get('indentation', self.indentation_input.text())
         if isinstance(indentation, str):
             self.indentation_input.setText(indentation.replace('\t', '\\t'))
+
+        random_name_length = state.get('random_name_length', self.random_name_length_input.value())
+        if isinstance(random_name_length, int):
+            self.random_name_length_input.setValue(random_name_length)
+
+        charset_idx = state.get('random_charset_index', self.charset_combo.currentIndex())
+        if isinstance(charset_idx, int) and 0 <= charset_idx < len(CHARSETS):
+            self.charset_combo.setCurrentIndex(charset_idx)
+
 
     def export_layout(self):
         file_path, _ = QFileDialog.getSaveFileName(
@@ -527,8 +572,12 @@ class GUI:
     def run(self):
         self.window.show()
         self.app.exec()
+        if not self.window.do_obfuscation:
+            return None
         return {
             'layers': [l.data(Qt.UserRole) for l in self.window.list_widget.get_items_order()],
             'comments': self.window.comment_length_input.value(),
             'indentation': self.window.indentation_input.text().replace('\\t', '\t') or '    ',
-        } if self.window.do_obfuscation else None
+            'random_name_length': self.window.random_name_length_input.value(),
+            'random_charset_index': self.window.charset_combo.currentIndex(),
+        }
