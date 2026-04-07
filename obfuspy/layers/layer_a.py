@@ -35,7 +35,7 @@ class Layer_A(ast.NodeTransformer):
         if isinstance(node.value, float):
             if node.value == 0:
                 random_int = random.randint(1, 999_999_999)
-                expr_str = f"({random_int}^{random_int})"
+                expr_str = f"({random_int}^{random_int})*1.0"
             else:
                 int_part = int(node.value)
                 decimal_part = node.value - int_part
