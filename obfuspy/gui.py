@@ -1,3 +1,5 @@
+import json
+
 from PySide6.QtWidgets import *
 from PySide6.QtGui import *
 from PySide6.QtCore import *
@@ -120,12 +122,6 @@ class DragDropWindow(QWidget):
         main_layout.addLayout(left_panel, stretch=2)
         main_layout.addLayout(right_panel, stretch=1)
 
-        steps = ["Step 1: Start", "Step 2: Process", "Step 3: Verify", "Step 4: Finish"]
-        for step in steps:
-            layer = ObfLayer(step, {"key": "value"})
-            item = QListWidgetItem(str(layer))
-            item.setData(Qt.UserRole, layer)
-            self.list_widget.addItem(item)
 
     def add_button_layout(self) -> QHBoxLayout:
         button_layout = QHBoxLayout()
@@ -157,7 +153,7 @@ class DragDropWindow(QWidget):
             }
         """)
         import_button = QPushButton("Import")
-        import_button.clicked.connect(self.print_order)
+        import_button.clicked.connect(self.import_layout)
         import_button.setStyleSheet("""
             QPushButton {
                 background-color: #3498DB;
@@ -170,7 +166,7 @@ class DragDropWindow(QWidget):
             }
         """)
         export_button = QPushButton("Export")
-        export_button.clicked.connect(self.print_order)
+        export_button.clicked.connect(self.export_layout)
         export_button.setStyleSheet("""
             QPushButton {
                 background-color: #3498DB;
@@ -244,20 +240,26 @@ class DragDropWindow(QWidget):
         settings_layout.addWidget(self.description_text)
 
         self.optional_widgets = {}
+        spin_box_style = """
+            QSpinBox, QDoubleSpinBox {
+                background-color: #2b2b2b;
+                color: white;
+                padding: 5px;
+                padding-right: 42px;
+                border: 1px solid #171717;
+                border-radius: 4px;
+            }
+            QSpinBox:hover, QDoubleSpinBox:hover {
+                border: 1px solid #2a2a2a;
+            }
+        """
         denominator_label = QLabel("Denominator:")
         denominator_label.setStyleSheet(label_style)
         denominator_spin = QSpinBox()
         denominator_spin.setRange(2, 100)
         denominator_spin.setValue(6)
-        denominator_spin.setStyleSheet("""
-            QSpinBox {
-                background-color: #2b2b2b;
-                color: white;
-                padding: 5px;
-                border: 1px solid #171717;
-                border-radius: 4px;
-            }
-        """)
+        denominator_spin.setButtonSymbols(QAbstractSpinBox.PlusMinus)
+        denominator_spin.setStyleSheet(spin_box_style)
         self.optional_widgets['Numerical Constants'] = (denominator_label, denominator_spin)
 
         anti_debug_label = QLabel("Anti-Debug Statement Probability")
@@ -267,15 +269,8 @@ class DragDropWindow(QWidget):
         anti_debug_spin.setValue(0.2)
         anti_debug_spin.setSingleStep(0.01)
         anti_debug_spin.setDecimals(2)
-        anti_debug_spin.setStyleSheet("""
-            QDoubleSpinBox {
-                background-color: #2b2b2b;
-                color: white;
-                padding: 5px;
-                border: 1px solid #171717;
-                border-radius: 4px;
-            }
-        """)
+        anti_debug_spin.setButtonSymbols(QAbstractSpinBox.PlusMinus)
+        anti_debug_spin.setStyleSheet(spin_box_style)
         self.optional_widgets['Anti-Debug Statements'] = (anti_debug_label, anti_debug_spin)
 
         dead_code_label = QLabel("Dead Code Probability")
@@ -285,15 +280,8 @@ class DragDropWindow(QWidget):
         dead_code_spin.setValue(0.2)
         dead_code_spin.setSingleStep(0.01)
         dead_code_spin.setDecimals(2)
-        dead_code_spin.setStyleSheet("""
-            QDoubleSpinBox {
-                background-color: #2b2b2b;
-                color: white;
-                padding: 5px;
-                border: 1px solid #171717;
-                border-radius: 4px;
-            }
-        """)
+        dead_code_spin.setButtonSymbols(QAbstractSpinBox.PlusMinus)
+        dead_code_spin.setStyleSheet(spin_box_style)
         self.optional_widgets['Dead Code'] = (dead_code_label, dead_code_spin)
 
         for label, *widgets in self.optional_widgets.values():
@@ -322,18 +310,24 @@ class DragDropWindow(QWidget):
 
     def add_finish_layout(self) -> QVBoxLayout:
         bottom_controls = QVBoxLayout()
-        self.comment_length_input = QSpinBox()
-        self.comment_length_input.setRange(-1, 1000)
-        self.comment_length_input.setValue(-1)
-        self.comment_length_input.setStyleSheet("""
+        spin_box_style = """
             QSpinBox {
                 background-color: #2b2b2b;
                 color: white;
                 padding: 5px;
+                padding-right: 42px;
                 border: 1px solid #171717;
                 border-radius: 4px;
             }
-        """)
+            QSpinBox:hover {
+                border: 1px solid #2a2a2a;
+            }
+        """
+        self.comment_length_input = QSpinBox()
+        self.comment_length_input.setRange(-1, 1000)
+        self.comment_length_input.setValue(-1)
+        self.comment_length_input.setButtonSymbols(QAbstractSpinBox.PlusMinus)
+        self.comment_length_input.setStyleSheet(spin_box_style)
         self.comment_length_input.setPrefix('Comment Length: ')
 
         self.indentation_input = QLineEdit()
@@ -429,6 +423,96 @@ class DragDropWindow(QWidget):
         print('Current order of steps:')
         for i, step in enumerate(current_order, 1):
             print(f"{i}. {step.data(Qt.UserRole)}")
+
+    def _serialize_state(self) -> dict:
+        layers = []
+        for item in self.list_widget.get_items_order():
+            layer: ObfLayer = item.data(Qt.UserRole)
+            layers.append({
+                'name': layer.name,
+                'settings': layer.settings,
+            })
+
+        return {
+            'layers': layers,
+            'comments': self.comment_length_input.value(),
+            'indentation': self.indentation_input.text().replace('\\t', '\t') or '    ',
+        }
+
+    def _deserialize_state(self, state: dict) -> None:
+        if not isinstance(state, dict):
+            raise ValueError('Invalid layout file format: root must be an object.')
+
+        if 'layers' not in state or not isinstance(state['layers'], list):
+            raise ValueError('Invalid layout file format: "layers" must be a list.')
+
+        self.list_widget.clear()
+        for layer_obj in state['layers']:
+            if not isinstance(layer_obj, dict):
+                continue
+
+            name = layer_obj.get('name')
+            settings = layer_obj.get('settings', {})
+            if not isinstance(name, str) or name not in self.obfuscation_layers:
+                continue
+            if not isinstance(settings, dict):
+                settings = {}
+
+            layer = ObfLayer(name, settings)
+            item = QListWidgetItem(str(layer))
+            item.setData(Qt.UserRole, layer)
+            self.list_widget.addItem(item)
+
+        comments = state.get('comments', self.comment_length_input.value())
+        if isinstance(comments, int):
+            comments = max(self.comment_length_input.minimum(), min(comments, self.comment_length_input.maximum()))
+            self.comment_length_input.setValue(comments)
+
+        indentation = state.get('indentation', self.indentation_input.text())
+        if isinstance(indentation, str):
+            self.indentation_input.setText(indentation.replace('\t', '\\t'))
+
+    def export_layout(self):
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            'Export Obfuscation Layout',
+            '',
+            'JSON Files (*.json);;All Files (*)'
+        )
+        if not file_path:
+            return
+
+        if not file_path.lower().endswith('.json'):
+            file_path += '.json'
+
+        try:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(self._serialize_state(), f, indent=2)
+        except Exception as exc:
+            QMessageBox.critical(self, 'Export Failed', f'Could not export layout:\n{exc}')
+            return
+
+        QMessageBox.information(self, 'Export Complete', f'Layout exported to:\n{file_path}')
+
+    def import_layout(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            'Import Obfuscation Layout',
+            '',
+            'JSON Files (*.json);;All Files (*)'
+        )
+        if not file_path:
+            return
+
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                state = json.load(f)
+            self._deserialize_state(state)
+        except Exception as exc:
+            QMessageBox.critical(self, 'Import Failed', f'Could not import layout:\n{exc}')
+            return
+
+        QMessageBox.information(self, 'Import Complete', f'Layout imported from:\n{file_path}')
 
     def start_obfuscation(self):
         self.do_obfuscation = True
