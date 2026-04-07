@@ -16,6 +16,10 @@ from obfuspy.layers.layer_g import Layer_G
 from obfuspy.layers.layer_h import Layer_H
 from obfuspy.layers.layer_i import Layer_I
 from obfuspy.layers.layer_j import Layer_J
+from obfuspy.layers.layer_k import Layer_K
+from obfuspy.layers.layer_l import Layer_L
+from obfuspy.layers.layer_m import Layer_M
+from obfuspy.layers.layer_n import Layer_N
 
 OBFUSCATION_LAYERS = {
     'Numerical Constants':   Layer_A,
@@ -28,6 +32,10 @@ OBFUSCATION_LAYERS = {
     'Builtins':              Layer_H,
     'Imports':               Layer_I,
     'Arguments':             Layer_J,
+    'Functions':             Layer_K,
+    'Class Variables':       Layer_L,
+    'Variables':             Layer_M,
+    'Local Variables':       Layer_N,
 }
 
 

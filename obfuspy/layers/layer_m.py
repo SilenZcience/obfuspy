@@ -1,0 +1,229 @@
+import ast
+from obfuspy.util.randomizer import Randomizer, BUILTINS_DEFAULT
+
+
+class Layer_M(ast.NodeTransformer):
+    """
+    Layer M obfuscates module-level variables.
+
+    The variable is renamed internally, and the original name is preserved as
+    a compatibility alias at module scope so external imports and attribute
+    access can keep working.
+    """
+
+    def __init__(self, randomizer: Randomizer, file_module) -> None:
+        self.randomizer = randomizer
+        self.file_module = file_module
+        self.project_context = getattr(randomizer, 'project_context', {})
+        self.module_name = getattr(file_module, 'module_name', None)
+        self.scope_stack = []
+        self.current_table_stack = []
+
+    def _module_var_exports(self) -> dict:
+        return self.project_context.get('vars', {})
+
+    def _current_module_var_map(self) -> dict:
+        module_name = self.module_name
+        if module_name is None:
+            return {}
+
+        exports = self._module_var_exports()
+        prefix = f'{module_name}.'
+        return {
+            qualified_name.rsplit('.', 1)[-1]: obfuscated_name
+            for qualified_name, obfuscated_name in exports.items()
+            if qualified_name.startswith(prefix) and qualified_name.rsplit('.', 1)[-1] not in BUILTINS_DEFAULT
+        }
+
+    def _alias_assign(self, original_name: str, obfuscated_name: str, source_node) -> ast.Assign:
+        return ast.Assign(
+            targets=[ast.Name(id=original_name, ctx=ast.Store())],
+            value=ast.Name(id=obfuscated_name, ctx=ast.Load()),
+            lineno=getattr(source_node, 'lineno', 0),
+            col_offset=getattr(source_node, 'col_offset', 0),
+        )
+
+    def _rename_store_target(self, target, source_node):
+        module_var_map = self._current_module_var_map()
+        aliases = []
+
+        if isinstance(target, ast.Name):
+            original_name = target.id
+            obfuscated_name = module_var_map.get(original_name)
+            if obfuscated_name is not None and original_name not in BUILTINS_DEFAULT:
+                target.id = obfuscated_name
+                target.ctx = ast.Store()
+                aliases.append(self._alias_assign(original_name, obfuscated_name, source_node))
+            return target, aliases
+
+        if isinstance(target, (ast.Tuple, ast.List)):
+            new_elts = []
+            for element in target.elts:
+                new_element, element_aliases = self._rename_store_target(element, source_node)
+                new_elts.append(new_element)
+                aliases.extend(element_aliases)
+            target.elts = new_elts
+            return target, aliases
+
+        return target, aliases
+
+    def _is_module_scope(self) -> bool:
+        return not self.scope_stack
+
+    def _current_table(self):
+        return self.current_table_stack[-1] if self.current_table_stack else None
+
+    def _child_table_for(self, node, kind: str):
+        current_table = self._current_table()
+        if current_table is None:
+            return None
+
+        candidates = []
+        for child in current_table.get_children():
+            if child.get_name() == node.name and child.get_lineno() == getattr(node, 'lineno', None):
+                candidates.append(child)
+        if candidates:
+            return candidates[0]
+
+        for child in current_table.get_children():
+            if child.get_name() == node.name:
+                return child
+        return None
+
+    def _is_shadowed(self, name: str) -> bool:
+        current_table = self._current_table()
+        if current_table is None:
+            return False
+
+        try:
+            symbol = current_table.lookup(name)
+        except KeyError:
+            return False
+
+        return symbol.is_local() or symbol.is_parameter() or symbol.is_imported()
+
+    def visit_Module(self, node):
+        self.scope_stack = []
+        self.current_table_stack = [self.file_module.symtable]
+        self.generic_visit(node)
+        self.current_table_stack.pop()
+        return node
+
+    def visit_FunctionDef(self, node):
+        child_table = self._child_table_for(node, 'function')
+        if child_table is not None:
+            self.current_table_stack.append(child_table)
+        self.scope_stack.append('function')
+        self.generic_visit(node)
+        self.scope_stack.pop()
+        if child_table is not None:
+            self.current_table_stack.pop()
+        return node
+
+    def visit_AsyncFunctionDef(self, node):
+        child_table = self._child_table_for(node, 'function')
+        if child_table is not None:
+            self.current_table_stack.append(child_table)
+        self.scope_stack.append('function')
+        self.generic_visit(node)
+        self.scope_stack.pop()
+        if child_table is not None:
+            self.current_table_stack.pop()
+        return node
+
+    def visit_ClassDef(self, node):
+        child_table = self._child_table_for(node, 'class')
+        if child_table is not None:
+            self.current_table_stack.append(child_table)
+        self.scope_stack.append('class')
+        self.generic_visit(node)
+        self.scope_stack.pop()
+        if child_table is not None:
+            self.current_table_stack.pop()
+        return node
+
+    def visit_Assign(self, node):
+        self.generic_visit(node)
+        if not self._is_module_scope():
+            return node
+
+        aliases = []
+        new_targets = []
+
+        for target in node.targets:
+            new_target, target_aliases = self._rename_store_target(target, node)
+            new_targets.append(new_target)
+            aliases.extend(target_aliases)
+
+        node.targets = new_targets
+        return [node, *aliases] if aliases else node
+
+    def visit_AnnAssign(self, node):
+        self.generic_visit(node)
+        if not self._is_module_scope():
+            return node
+
+        node.target, aliases = self._rename_store_target(node.target, node)
+        return [node, *aliases] if aliases else node
+
+    def visit_AugAssign(self, node):
+        self.generic_visit(node)
+        if not self._is_module_scope():
+            return node
+
+        node.target, aliases = self._rename_store_target(node.target, node)
+        return [node, *aliases] if aliases else node
+
+    def visit_For(self, node):
+        self.generic_visit(node)
+        if not self._is_module_scope():
+            return node
+
+        node.target, aliases = self._rename_store_target(node.target, node)
+        return [node, *aliases] if aliases else node
+
+    def visit_AsyncFor(self, node):
+        self.generic_visit(node)
+        if not self._is_module_scope():
+            return node
+
+        node.target, aliases = self._rename_store_target(node.target, node)
+        return [node, *aliases] if aliases else node
+
+    def visit_With(self, node):
+        self.generic_visit(node)
+        if not self._is_module_scope():
+            return node
+
+        aliases = []
+        for item in node.items:
+            if item.optional_vars is None:
+                continue
+            item.optional_vars, item_aliases = self._rename_store_target(item.optional_vars, node)
+            aliases.extend(item_aliases)
+        return [node, *aliases] if aliases else node
+
+    def visit_AsyncWith(self, node):
+        self.generic_visit(node)
+        if not self._is_module_scope():
+            return node
+
+        aliases = []
+        for item in node.items:
+            if item.optional_vars is None:
+                continue
+            item.optional_vars, item_aliases = self._rename_store_target(item.optional_vars, node)
+            aliases.extend(item_aliases)
+        return [node, *aliases] if aliases else node
+
+    def visit_Name(self, node):
+        if not isinstance(node.ctx, ast.Load):
+            return node
+
+        module_var_map = self._current_module_var_map()
+        if node.id not in module_var_map:
+            return node
+
+        if node.id not in BUILTINS_DEFAULT and (self._is_module_scope() or not self._is_shadowed(node.id)):
+            node.id = module_var_map[node.id]
+        return node
