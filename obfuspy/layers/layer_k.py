@@ -1,4 +1,5 @@
 import ast
+import random
 from obfuspy.util.randomizer import Randomizer, BUILTINS_DEFAULT
 
 
@@ -40,6 +41,7 @@ class Layer_K(ast.NodeTransformer):
         method_map = {}
         method_reverse_map = {}
         new_body = []
+        alias_assign_map = {}
 
         for child in node.body:
             if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and self._should_rename(child.name):
@@ -51,9 +53,11 @@ class Layer_K(ast.NodeTransformer):
                     method_reverse_map[export_name] = original_name
                     child.name = export_name
                     new_body.append(child)
-                    new_body.append(self._alias_assign(original_name, export_name, child))
+                    alias_assign_map[len(new_body)] = self._alias_assign(original_name, export_name, child)
                     continue
             new_body.append(child)
+        for idx, alias_assign in reversed(alias_assign_map.items()):
+            new_body.insert(random.randint(idx, len(new_body)), alias_assign)
         node.body = new_body
 
         self.class_context_stack.append({
