@@ -84,7 +84,6 @@ class Randomizer:
 
 
     @staticmethod
-    @lru_cache(maxsize=None)
     def create_random_generator(n: int, char_set: list = None):
         return Randomizer._random_name_gen(n, char_set)
 
