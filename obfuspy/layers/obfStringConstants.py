@@ -44,9 +44,9 @@ class StringUsageFinder(ast.NodeVisitor):
         return self.uses_strings
 
 
-class Layer_B(ast.NodeTransformer):
+class ObfStringConstants(ast.NodeTransformer):
     """
-    Layer B obfuscates string constants in the AST.
+    Obfuscates string constants.
     """
     def __init__(self, randomizer: Randomizer, _) -> None:
         self.randomizer = randomizer

@@ -9,10 +9,13 @@ from obfuspy.util.charsets import CHARSETS
 from obfuspy.util.randomizer import Randomizer
 from obfuspy.util.randomizer import ALL_BUILTINS
 from obfuspy.util.unparser import unparse
-from obfuspy.layers.layer_j import Layer_J
-from obfuspy.layers.layer_k import Layer_K
-from obfuspy.layers.layer_l import Layer_L
-from obfuspy.layers.layer_m import Layer_M
+from obfuspy.layers.obfStringConstants import ObfStringConstants
+from obfuspy.layers.obfAntiTampering import ObfAntiTampering
+from obfuspy.layers.obfDefArguments import ObfDefArguments
+from obfuspy.layers.obfDefNames import ObfDefnames
+from obfuspy.layers.obfClassVariables import ObfClassVariables
+from obfuspy.layers.obfModuleVariables import ObfModuleVariables
+from obfuspy.layers.obfClassNames import ObfClassNames
 
 
 OBFUSCATE_NUMBERS = True
@@ -58,7 +61,7 @@ class Obfuscator:
         return '.'.join(parts)
 
     @staticmethod
-    def _collect_project_exports(file_modules, randomizer: Randomizer) -> dict:
+    def _collect_project_exports(file_modules, randomizer: Randomizer, *, include_functions: bool, include_classes: bool) -> dict:
         export_map = {}
 
         def maybe_add_export(qualified_name: str, function_name: str) -> None:
@@ -71,14 +74,19 @@ class Obfuscator:
 
         def walk(node, prefix_parts: list) -> None:
             if isinstance(node, ast.ClassDef):
+                if include_classes:
+                    qualified_name = '.'.join([*prefix_parts, node.name])
+                    maybe_add_export(qualified_name, node.name)
+
                 class_parts = [*prefix_parts, node.name]
                 for child in node.body:
                     walk(child, class_parts)
                 return
 
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                qualified_name = '.'.join([*prefix_parts, node.name])
-                maybe_add_export(qualified_name, node.name)
+                if include_functions:
+                    qualified_name = '.'.join([*prefix_parts, node.name])
+                    maybe_add_export(qualified_name, node.name)
 
                 callable_parts = [*prefix_parts, node.name]
                 for child in node.body:
@@ -325,9 +333,13 @@ class Obfuscator:
     def obfuscate(settings: dict) -> None:
         randomizer = Randomizer()
         n = settings.get('random_name_length', 10)
+        m = settings.get('random_comment_length', 10)
         charset_idx = settings.get('random_charset_index', 0)
         charset = CHARSETS[charset_idx] if 0 <= charset_idx < len(CHARSETS) else CHARSETS[0]
-        randomizer.set_random_gen(n, charset)
+        randomizer.set_random_gen(n, m, charset)
+
+        prefix   = '#!/usr/bin/env python3\n# -*- coding: utf-8 -*-\n'
+        post_fix = '\n# Obfuscated by *obfuspy* (Silas A. Kraume)\n'
 
         file_modules = sorted(settings['file_modules'], key=lambda file_module: file_module.in_path)
 
@@ -356,20 +368,26 @@ class Obfuscator:
             'vars': {},
         }
 
-        has_function_layer = any(layer is Layer_K for layer, _ in settings['obf_layers'])
-        if has_function_layer:
-            randomizer.project_context['exports'] = Obfuscator._collect_project_exports(file_modules, randomizer)
+        has_function_layer = any(layer is ObfDefnames for layer, _ in settings['obf_layers'])
+        has_class_layer = any(layer is ObfClassNames for layer, _ in settings['obf_layers'])
+        if has_function_layer or has_class_layer:
+            randomizer.project_context['exports'] = Obfuscator._collect_project_exports(
+                file_modules,
+                randomizer,
+                include_functions=has_function_layer,
+                include_classes=has_class_layer,
+            )
             randomizer.project_context['reverse_exports'] = Obfuscator._reverse_export_map(randomizer.project_context['exports'])
 
-        has_class_var_layer = any(layer is Layer_L for layer, _ in settings['obf_layers'])
+        has_class_var_layer = any(layer is ObfClassVariables for layer, _ in settings['obf_layers'])
         if has_class_var_layer:
             randomizer.project_context['class_vars'] = Obfuscator._collect_class_var_exports(file_modules, randomizer)
 
-        has_module_var_layer = any(layer is Layer_M for layer, _ in settings['obf_layers'])
+        has_module_var_layer = any(layer is ObfModuleVariables for layer, _ in settings['obf_layers'])
         if has_module_var_layer:
             randomizer.project_context['vars'] = Obfuscator._collect_module_var_exports(file_modules, randomizer)
 
-        has_argument_layer = any(layer is Layer_J for layer, _ in settings['obf_layers'])
+        has_argument_layer = any(layer is ObfDefArguments for layer, _ in settings['obf_layers'])
         if has_argument_layer:
             randomizer.project_context['keyword_args_in_calls'] = Obfuscator._collect_used_keyword_argument_names(file_modules)
             randomizer.project_context['arg_exports'] = Obfuscator._collect_argument_exports(
@@ -378,14 +396,19 @@ class Obfuscator:
                 randomizer.project_context['exports']
             )
 
+        anti_tampering = None
         for file_module in file_modules:
             print('Obfuscating file:', file_module.in_path)
             for layer, args in settings['obf_layers']:
                 print('Obfuscation layer:', layer.__name__)
                 layer(randomizer, file_module, *args).visit(file_module.tree)
             out_code = unparse(file_module.tree, settings['indentation'])
-            if settings['comments']:
-                out_code = randomizer.generate_random_comments(out_code)
-            prefix   = '#!/usr/bin/env python3\n# -*- coding: utf-8 -*-\n'
-            post_fix = '\n# Obfuscated by *obfuspy* (Silas A. Kraume)\n'
+
+            if settings['random_comment_length']:
+                rnd_cmt_list = list(randomizer.generate_random_comments(out_code))
+                file_module_lines = out_code.split('\n')
+                for i, (_, rnd_cmt) in enumerate(zip(file_module_lines, rnd_cmt_list)):
+                    file_module_lines[i] += f"#{rnd_cmt}"
+                out_code = '\n'.join(file_module_lines)
+
             file_module.set_code(prefix + out_code + post_fix)

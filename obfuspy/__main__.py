@@ -6,36 +6,40 @@ from obfuspy.gui import GUI
 from obfuspy.util.domain import File_Module
 from obfuspy.util.obfuscator import Obfuscator
 
-from obfuspy.layers.layer_a import Layer_A
-from obfuspy.layers.layer_b import Layer_B
-from obfuspy.layers.layer_c import Layer_C
-from obfuspy.layers.layer_d import Layer_D
-from obfuspy.layers.layer_e import Layer_E
-from obfuspy.layers.layer_f import Layer_F
-from obfuspy.layers.layer_g import Layer_G
-from obfuspy.layers.layer_h import Layer_H
-from obfuspy.layers.layer_i import Layer_I
-from obfuspy.layers.layer_j import Layer_J
-from obfuspy.layers.layer_k import Layer_K
-from obfuspy.layers.layer_l import Layer_L
-from obfuspy.layers.layer_m import Layer_M
-from obfuspy.layers.layer_n import Layer_N
+from obfuspy.layers.obfNumericalConstants import ObfNumericalConstants
+from obfuspy.layers.obfStringConstants import ObfStringConstants
+from obfuspy.layers.obfDocstrings import ObfDocStrings
+from obfuspy.layers.obfAssignements import ObfAssignements
+from obfuspy.layers.obfTypeAnnotations import ObfTypeAnnotations
+from obfuspy.layers.obfAntiDebugging import ObfAntiDebugging
+from obfuspy.layers.obfAntiTampering import ObfAntiTampering
+from obfuspy.layers.obfDeadCode import ObfDeadCode
+from obfuspy.layers.obfBuiltins import ObfBuiltins
+from obfuspy.layers.obfImports import ObfImports
+from obfuspy.layers.obfDefArguments import ObfDefArguments
+from obfuspy.layers.obfDefNames import ObfDefnames
+from obfuspy.layers.obfClassVariables import ObfClassVariables
+from obfuspy.layers.obfModuleVariables import ObfModuleVariables
+from obfuspy.layers.obfLocalVariables import ObfLocalVariables
+from obfuspy.layers.obfClassNames import ObfClassNames
 
 OBFUSCATION_LAYERS = {
-    'Numerical Constants':   Layer_A,
-    'String Constants':      Layer_B,
-    'Docstrings':            Layer_C,
-    'Assignements':          Layer_D,
-    'Annotations':           Layer_E,
-    'Anti-Debug Statements': Layer_F,
-    'Dead Code':             Layer_G,
-    'Builtins':              Layer_H,
-    'Imports':               Layer_I,
-    'Arguments':             Layer_J,
-    'Functions':             Layer_K,
-    'Class Variables':       Layer_L,
-    'Variables':             Layer_M,
-    'Local Variables':       Layer_N,
+    'Numerical Constants':       ObfNumericalConstants,
+    'String Constants':          ObfStringConstants,
+    'Docstrings':                ObfDocStrings,
+    'Assignements':              ObfAssignements,
+    'Type Annotations':          ObfTypeAnnotations,
+    'Anti-Debug Statements':     ObfAntiDebugging,
+    'Anti-Tampering Statements': ObfAntiTampering,
+    'Dead Code':                 ObfDeadCode,
+    'Builtins':                  ObfBuiltins,
+    'Imports':                   ObfImports,
+    'Function Arguments':        ObfDefArguments,
+    'Function Names':            ObfDefnames,
+    'Class Names':               ObfClassNames,
+    'Local Variables':           ObfLocalVariables,
+    'Class Variables':           ObfClassVariables,
+    'Module Variables':          ObfModuleVariables,
 }
 
 
@@ -68,14 +72,26 @@ def main():
     parser = argparse.ArgumentParser(description='obfuscate a python file/module.')
     parser.add_argument('PATH', action='store', default=None,
                         nargs='+', help='FILE(s) and/or FOLDER(s) to obfuscate')
+    parser.add_argument('--json', action='store', help='Path to JSON file to load settings from (overrides GUI)',
+                        default=None)
+
     file_modules = acc_py_files(parser.parse_args().PATH)
-    # TODO: if no files? maybe GUI fileselectdialog
-    settings: dict = GUI(OBFUSCATION_LAYERS).run()
-    if settings is None:
-        return
-    settings['file_modules'] = file_modules
+    json_settings_path = parser.parse_args().json
+
+    gui = GUI(OBFUSCATION_LAYERS)
+    if json_settings_path:
+        settings = gui.load_settings_from_json(json_settings_path)
+        if settings is None:
+            return
+    else:
+         # TODO: if no files? maybe GUI fileselectdialog
+        settings: dict = gui.run()
+        if settings is None:
+            return
+
     settings['obf_layers'] = [(OBFUSCATION_LAYERS[l.name], l.settings.values()) for l in settings['layers']]
-    # return
+    settings['file_modules'] = file_modules
+
     Obfuscator.obfuscate(settings)
     for file_module in file_modules:
         with open(file_module.out_path, 'w', encoding='utf-8') as f:

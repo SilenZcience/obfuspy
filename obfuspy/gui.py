@@ -275,6 +275,17 @@ class DragDropWindow(QWidget):
         anti_debug_spin.setStyleSheet(spin_box_style)
         self.optional_widgets['Anti-Debug Statements'] = (anti_debug_label, anti_debug_spin)
 
+        anti_tampering_label = QLabel('Anti-Tampering Statement Probability')
+        anti_tampering_label.setStyleSheet(label_style)
+        anti_tampering_spin = QDoubleSpinBox()
+        anti_tampering_spin.setRange(0.0, 1.0)
+        anti_tampering_spin.setValue(0.2)
+        anti_tampering_spin.setSingleStep(0.01)
+        anti_tampering_spin.setDecimals(2)
+        anti_tampering_spin.setButtonSymbols(QAbstractSpinBox.PlusMinus)
+        anti_tampering_spin.setStyleSheet(spin_box_style)
+        self.optional_widgets['Anti-Tampering Statements'] = (anti_tampering_label, anti_tampering_spin)
+
         dead_code_label = QLabel('Dead Code Probability')
         dead_code_label.setStyleSheet(label_style)
         dead_code_spin = QDoubleSpinBox()
@@ -469,10 +480,10 @@ class DragDropWindow(QWidget):
 
         return {
             'layers': layers,
-            'comments': self.comment_length_input.value(),
-            'indentation': self.indentation_input.text().replace('\\t', '\t') or '    ',
             'random_name_length': self.random_name_length_input.value(),
             'random_charset_index': self.charset_combo.currentIndex(),
+            'random_comment_length': self.comment_length_input.value(),
+            'indentation': self.indentation_input.text().replace('\\t', '\t') or '    ',
         }
 
     def _deserialize_state(self, state: dict) -> None:
@@ -499,7 +510,7 @@ class DragDropWindow(QWidget):
             item.setData(Qt.UserRole, layer)
             self.list_widget.addItem(item)
 
-        comments = state.get('comments', self.comment_length_input.value())
+        comments = state.get('random_comment_length', self.comment_length_input.value())
         if isinstance(comments, int):
             comments = max(self.comment_length_input.minimum(), min(comments, self.comment_length_input.maximum()))
             self.comment_length_input.setValue(comments)
@@ -569,15 +580,28 @@ class GUI:
         self.app = QApplication([])
         self.window = DragDropWindow(obfuscation_layers)
 
+    def _get_return_value(self):
+        return {
+            'layers': [l.data(Qt.UserRole) for l in self.window.list_widget.get_items_order()],
+            'random_name_length': self.window.random_name_length_input.value(),
+            'random_charset_index': self.window.charset_combo.currentIndex(),
+            'random_comment_length': self.window.comment_length_input.value(),
+            'indentation': self.window.indentation_input.text().replace('\\t', '\t') or '    ',
+        }
+
+    def load_settings_from_json(self, json_file_path: str) -> dict:
+        try:
+            with open(json_file_path, 'r', encoding='utf-8') as json_file:
+                state = json.load(json_file)
+            self.window._deserialize_state(state)
+            return self._get_return_value()
+        except Exception as exc:
+            QMessageBox.critical(self.window, 'Load Failed', f'Could not load settings from JSON:\n{exc}')
+            return None
+
     def run(self):
         self.window.show()
         self.app.exec()
         if not self.window.do_obfuscation:
             return None
-        return {
-            'layers': [l.data(Qt.UserRole) for l in self.window.list_widget.get_items_order()],
-            'comments': self.window.comment_length_input.value(),
-            'indentation': self.window.indentation_input.text().replace('\\t', '\t') or '    ',
-            'random_name_length': self.window.random_name_length_input.value(),
-            'random_charset_index': self.window.charset_combo.currentIndex(),
-        }
+        return self._get_return_value()

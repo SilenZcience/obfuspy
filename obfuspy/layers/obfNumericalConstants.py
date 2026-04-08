@@ -25,9 +25,9 @@ ONE_LAMBDAS = [
     lambda n: f"(1 << {n&63} >> {n&63})"
 ]
 
-class Layer_A(ast.NodeTransformer):
+class ObfNumericalConstants(ast.NodeTransformer):
     """
-    Layer A obfuscates numerical constants in the AST.
+    Obfuscates numerical constants(int and float literals).
     """
     def __init__(self, _, __, numerical_denominator: str) -> None:
         self.numerical_denominator = int(numerical_denominator)

@@ -3,9 +3,9 @@ import random
 from obfuspy.util.randomizer import Randomizer
 
 
-class Layer_C(ast.NodeTransformer):
+class ObfDocStrings(ast.NodeTransformer):
     """
-    Layer C obfuscates docstrings in the AST.
+    Obfuscates docstrings (__doc__).
     """
     def __init__(self, randomizer: Randomizer, _) -> None:
         self.randomizer = randomizer

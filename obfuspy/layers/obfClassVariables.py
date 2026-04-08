@@ -2,13 +2,9 @@ import ast
 from obfuspy.util.randomizer import Randomizer
 
 
-class Layer_L(ast.NodeTransformer):
+class ObfClassVariables(ast.NodeTransformer):
     """
-    Layer L obfuscates class variables.
-
-    The class variable gets renamed, but the original name is kept as a
-    compatibility alias inside the class body so code like `WTF.c` can keep
-    working even when the actual storage name is obfuscated.
+    Obfuscates class variables.
     """
 
     def __init__(self, randomizer: Randomizer, file_module) -> None:

@@ -2,9 +2,9 @@ import ast
 import random
 
 
-class Layer_E(ast.NodeTransformer):
+class ObfTypeAnnotations(ast.NodeTransformer):
     """
-    Layer E obfuscates annotations in function definitions and assignments in the AST.
+    Obfuscates type annotations in function definitions and assignments.
     """
     def __init__(self, _, __) -> None:
         pass

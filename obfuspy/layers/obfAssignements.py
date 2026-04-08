@@ -1,9 +1,9 @@
 import ast
 
 
-class Layer_D(ast.NodeTransformer):
+class ObfAssignements(ast.NodeTransformer):
     """
-    Layer D obfuscates assignments in the AST.
+    Obfuscates assignments.
     """
     def __init__(self, _, __) -> None:
         pass

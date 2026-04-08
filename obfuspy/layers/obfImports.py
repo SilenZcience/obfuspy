@@ -3,9 +3,9 @@ from obfuspy.util.randomizer import Randomizer
 
 
 
-class Layer_I(ast.NodeTransformer):
+class ObfImports(ast.NodeTransformer):
     """
-    Layer I obfuscates imports in the AST.
+    Obfuscates import-statements.
     """
     def __init__(self, randomizer: Randomizer, file_module) -> None:
         self.randomizer = randomizer
@@ -13,6 +13,7 @@ class Layer_I(ast.NodeTransformer):
         self.import_map = {}
         self.binding_map = {}
         self.project_context = getattr(randomizer, 'project_context', {})
+        self.explicit_global_stack = []
 
     def _resolve_import_module(self, node) -> str:
         module_name = getattr(self.file_module, 'module_name', None)
@@ -45,8 +46,27 @@ class Layer_I(ast.NodeTransformer):
     def visit_Module(self, node):
         self.import_map = {}
         self.binding_map = {}
+        self.explicit_global_stack = []
         self.generic_visit(node)
         return node
+
+    def visit_FunctionDef(self, node):
+        self.explicit_global_stack.append(set())
+        self.generic_visit(node)
+        self.explicit_global_stack.pop()
+        return node
+
+    def visit_AsyncFunctionDef(self, node):
+        self.explicit_global_stack.append(set())
+        self.generic_visit(node)
+        self.explicit_global_stack.pop()
+        return node
+
+    def _in_module_scope(self) -> bool:
+        return not self.explicit_global_stack
+
+    def _is_explicit_global_name(self, name: str) -> bool:
+        return bool(self.explicit_global_stack) and name in self.explicit_global_stack[-1]
 
     def visit_Import(self, node):
         for name in node.names:
@@ -79,9 +99,15 @@ class Layer_I(ast.NodeTransformer):
 
     def visit_Global(self, node):
         new_names = []
+        current_globals = self.explicit_global_stack[-1] if self.explicit_global_stack else None
         for name in node.names:
+            if current_globals is not None:
+                current_globals.add(name)
             if name in self.import_map:
-                new_names.append(self.import_map[name])
+                mapped = self.import_map[name]
+                new_names.append(mapped)
+                if current_globals is not None:
+                    current_globals.add(mapped)
             else:
                 new_names.append(name)
         node.names = new_names
@@ -126,7 +152,16 @@ class Layer_I(ast.NodeTransformer):
         return node
 
     def visit_Name(self, node):
-        if isinstance(node.ctx, ast.Load) and node.id in self.import_map:
+        if node.id not in self.import_map:
+            return node
+
+        if isinstance(node.ctx, ast.Load):
+            return ast.Name(
+                id=self.import_map[node.id],
+                ctx=node.ctx
+            )
+
+        if isinstance(node.ctx, ast.Store) and (self._in_module_scope() or self._is_explicit_global_name(node.id)):
             return ast.Name(
                 id=self.import_map[node.id],
                 ctx=node.ctx

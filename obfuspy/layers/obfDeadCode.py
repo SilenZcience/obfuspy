@@ -3,9 +3,9 @@ import random
 from obfuspy.util.randomizer import Randomizer
 
 
-class Layer_G(ast.NodeTransformer):
+class ObfDeadCode(ast.NodeTransformer):
     """
-    Layer G inserts dead code into the AST.
+    Inserts dead code.
     """
     def __init__(self, randomizer: Randomizer, _, probability: float) -> None:
         self.randomizer = randomizer

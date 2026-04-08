@@ -71,9 +71,19 @@ ALL_KEYWORDS = set(keyword.kwlist + keyword.softkwlist)
 class Randomizer:
     def __init__(self) -> None:
         self.random_name_gen = None
+        self.random_comment_gen = None
 
-    def set_random_gen(self, n: int, char_set: list = None) -> None:
+    def set_random_gen(self, n: int, m: int, char_set: list = None) -> None:
         self.random_name_gen = Randomizer._random_name_gen(n, char_set)
+        if m < 0:
+            m = n
+        self.random_comment_gen = Randomizer._random_comment_gen(m, char_set)
+
+    @staticmethod
+    def _random_comment_gen(m: int, char_set: list = None):
+        random_gen = Randomizer._random_name_gen(m, char_set)
+        while True:
+            yield f"__{next(random_gen)}__"
 
     @staticmethod
     def _random_name_gen(n: int, char_set: list = None):
@@ -103,12 +113,11 @@ class Randomizer:
             yield from random_buffer
 
 
-    def generate_random_comments(self, code: str) -> str:
-        # TODO: fix length usage, also duplicates allowed so limit to set length ONLY!
+
+    def generate_random_comments(self, code: str):
         lines = code.split('\n')
         for i, _ in enumerate(lines):
             if lines[i].strip():
-                lines[i] += f"#{next(self.random_name_gen)}"
+                yield f"{next(self.random_comment_gen)}"
             else:
-                lines[i] = f"#{random.choice(lines)}"
-        return '\n'.join(lines)
+                yield f"{random.choice(lines)}"

@@ -3,10 +3,9 @@ import ast
 from obfuspy.util.randomizer import Randomizer
 
 
-class Layer_J(ast.NodeTransformer):
+class ObfDefArguments(ast.NodeTransformer):
     """
-    Layer J obfuscates function/method arguments using precomputed maps from
-    the obfuscator project context.
+    Obfuscates function/method arguments.
     """
 
     def __init__(self, randomizer: Randomizer, file_module) -> None:

@@ -3,12 +3,9 @@ import ast
 from obfuspy.util.randomizer import Randomizer
 
 
-class Layer_N(ast.NodeTransformer):
+class ObfLocalVariables(ast.NodeTransformer):
     """
-    Layer N obfuscates local variables in function scopes (including nested ones).
-
-    This layer does not obfuscate module variables, class variables, function names,
-    class names, imports, or argument names.
+    Obfuscates local variables in function scopes (including nested ones).
     """
 
     def __init__(self, randomizer: Randomizer, file_module) -> None:

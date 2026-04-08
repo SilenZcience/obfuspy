@@ -3,10 +3,9 @@ import random
 from obfuspy.util.randomizer import Randomizer, BUILTINS_DEFAULT
 
 
-class Layer_K(ast.NodeTransformer):
+class ObfDefnames(ast.NodeTransformer):
     """
-    Layer K obfuscates function names in the AST, ensuring that functions
-    pointing to external objects (e.g., imported modules or attributes) are not obfuscated.
+    Obfuscates function names.
     """
     def __init__(self, randomizer: Randomizer, file_module) -> None:
         self.randomizer = randomizer

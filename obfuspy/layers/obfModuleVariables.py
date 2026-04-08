@@ -2,13 +2,9 @@ import ast
 from obfuspy.util.randomizer import Randomizer, BUILTINS_DEFAULT
 
 
-class Layer_M(ast.NodeTransformer):
+class ObfModuleVariables(ast.NodeTransformer):
     """
-    Layer M obfuscates module-level variables.
-
-    The variable is renamed internally, and the original name is preserved as
-    a compatibility alias at module scope so external imports and attribute
-    access can keep working.
+    Obfuscates module-level variables.
     """
 
     def __init__(self, randomizer: Randomizer, file_module) -> None:
@@ -102,6 +98,18 @@ class Layer_M(ast.NodeTransformer):
 
         return symbol.is_local() or symbol.is_parameter() or symbol.is_imported()
 
+    def _is_global_binding(self, name: str) -> bool:
+        current_table = self._current_table()
+        if current_table is None:
+            return False
+
+        try:
+            symbol = current_table.lookup(name)
+        except KeyError:
+            return False
+
+        return symbol.is_global()
+
     def visit_Module(self, node):
         self.scope_stack = []
         self.current_table_stack = [self.file_module.symtable]
@@ -144,14 +152,14 @@ class Layer_M(ast.NodeTransformer):
 
     def visit_Assign(self, node):
         self.generic_visit(node)
-        if not self._is_module_scope():
-            return node
-
         aliases = []
         new_targets = []
 
         for target in node.targets:
-            new_target, target_aliases = self._rename_store_target(target, node)
+            if self._is_module_scope():
+                new_target, target_aliases = self._rename_store_target(target, node)
+            else:
+                new_target, target_aliases = self._rename_global_store_target(target, node)
             new_targets.append(new_target)
             aliases.extend(target_aliases)
 
@@ -168,11 +176,26 @@ class Layer_M(ast.NodeTransformer):
 
     def visit_AugAssign(self, node):
         self.generic_visit(node)
-        if not self._is_module_scope():
-            return node
+        if self._is_module_scope():
+            node.target, aliases = self._rename_store_target(node.target, node)
+            return [node, *aliases] if aliases else node
 
-        node.target, aliases = self._rename_store_target(node.target, node)
-        return [node, *aliases] if aliases else node
+        # In function scope, mirror `global NAME += expr` without evaluating expr twice.
+        if isinstance(node.target, ast.Name):
+            original_name = node.target.id
+            module_var_map = self._current_module_var_map()
+            obfuscated_name = module_var_map.get(original_name)
+            if obfuscated_name is not None and self._is_global_binding(original_name):
+                obfuscated_aug = ast.AugAssign(
+                    target=ast.Name(id=obfuscated_name, ctx=ast.Store()),
+                    op=node.op,
+                    value=node.value,
+                    lineno=getattr(node, 'lineno', 0),
+                    col_offset=getattr(node, 'col_offset', 0),
+                )
+                return [obfuscated_aug, self._alias_assign(original_name, obfuscated_name, node)]
+
+        return node
 
     def visit_For(self, node):
         self.generic_visit(node)
@@ -216,14 +239,49 @@ class Layer_M(ast.NodeTransformer):
             aliases.extend(item_aliases)
         return [node, *aliases] if aliases else node
 
-    def visit_Name(self, node):
-        if not isinstance(node.ctx, ast.Load):
-            return node
+    def _rename_global_store_target(self, target, source_node):
+        module_var_map = self._current_module_var_map()
+        aliases = []
 
+        if isinstance(target, ast.Name):
+            original_name = target.id
+            obfuscated_name = module_var_map.get(original_name)
+            if obfuscated_name is not None and self._is_global_binding(original_name):
+                target.id = obfuscated_name
+                target.ctx = ast.Store()
+                aliases.append(self._alias_assign(original_name, obfuscated_name, source_node))
+            return target, aliases
+
+        if isinstance(target, (ast.Tuple, ast.List)):
+            new_elts = []
+            for element in target.elts:
+                new_element, element_aliases = self._rename_global_store_target(element, source_node)
+                new_elts.append(new_element)
+                aliases.extend(element_aliases)
+            target.elts = new_elts
+            return target, aliases
+
+        return target, aliases
+
+    def visit_Global(self, node):
+        module_var_map = self._current_module_var_map()
+        expanded_names = []
+        for name in node.names:
+            obfuscated_name = module_var_map.get(name)
+            if obfuscated_name is not None:
+                expanded_names.append(obfuscated_name)
+            expanded_names.append(name)
+        node.names = list(dict.fromkeys(expanded_names))
+        return node
+
+    def visit_Name(self, node):
         module_var_map = self._current_module_var_map()
         if node.id not in module_var_map:
             return node
 
-        if node.id not in BUILTINS_DEFAULT and (self._is_module_scope() or not self._is_shadowed(node.id)):
+        if node.id in BUILTINS_DEFAULT:
+            return node
+
+        if isinstance(node.ctx, ast.Load) and (self._is_module_scope() or not self._is_shadowed(node.id)):
             node.id = module_var_map[node.id]
         return node

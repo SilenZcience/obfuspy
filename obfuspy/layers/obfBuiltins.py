@@ -2,9 +2,9 @@ import ast
 from obfuspy.util.randomizer import Randomizer, ALL_BUILTINS
 
 
-class Layer_H(ast.NodeTransformer):
+class ObfBuiltins(ast.NodeTransformer):
     """
-    Layer H obfuscates builtins in the AST.
+    Obfuscates builtins.
     """
     def __init__(self, randomizer: Randomizer, _) -> None:
         self.randomizer = randomizer
