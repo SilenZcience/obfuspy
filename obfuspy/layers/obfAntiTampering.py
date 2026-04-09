@@ -6,23 +6,27 @@ from functools import lru_cache
 
 AST_NODE_TYPES = {
     obj for _, obj in inspect.getmembers(ast)
-    if inspect.isclass(obj) and issubclass(obj, ast.AST)
+    if inspect.isclass(obj) and issubclass(obj, ast.AST) and not obj.__name__.isupper() and not obj.__name__.islower()
 }
 
+# exit(0)
 # verify:
 # with open(__file__, 'r', encoding='utf-8') as f:
 #     print((lambda tree:(lambda h:(list(map(lambda node:isinstance(node, ast.Add)and (print(ast.dump(node).encode()),h.update(ast.dump(node).encode())),ast.walk(tree))),h.hexdigest())[1])(hashlib.sha256()))(ast.parse(f.read())))
 # # (_ for _ in ()).throw(SystemExit(55))
+# # (globals()['__builtins__'].clear() if isinstance(globals()['__builtins__'], dict) else globals()['__builtins__'].__dict__.clear())
 
 ANTI_TAMPERING_EXEC = """import ast, hashlib
-source = open(__file__, 'r', encoding='utf-8').read()
+source = __import__('builtins').open(__file__, 'r', encoding='utf-8').read()
 tree = ast.parse(source)
 h = hashlib.sha256()
 for node in ast.walk(tree):
     if isinstance(node, ast.REPLACEMETYPE):
+        if __import__('builtins').hasattr(node, 'body'):
+            node.body = []
         h.update(ast.dump(node).encode())
 if h.hexdigest() != 'REPLACEMEHASH':
-    (globals()['__builtins__'].clear() if isinstance(globals()['__builtins__'], dict) else globals()['__builtins__'].__dict__.clear())
+    (_ for _ in ()).throw(ValueError(55))
 """
 ANTI_TEMPERING_EXEC_NODES = set()
 for node in ast.walk(ast.parse(ANTI_TAMPERING_EXEC)):
@@ -33,9 +37,14 @@ ANTI_TEMPERING_LAMBDA = """(
     (
         lambda tree,h:
         (
-            [(h.update(ast.dump(node).encode())) for node in ast.walk(tree) if isinstance(node,ast.REPLACEMETYPE)], h.hexdigest()
+            [
+                (__import__('builtins').hasattr(node, 'body') and __import__('builtins').__import__('builtins').setattr(node,'body',[]), h.update(ast.dump(node).encode()))
+                for node in ast.walk(tree)
+                if isinstance(node,ast.REPLACEMETYPE)
+            ],
+            h.hexdigest()
         )[1]
-    )(ast.parse(open(__file__,'r',encoding='utf-8').read()), hashlib.sha256()) == 'REPLACEMEHASH' or (globals()['__builtins__'].clear() if isinstance(globals()['__builtins__'], dict) else globals()['__builtins__'].__dict__.clear())
+    )(ast.parse(__import__('builtins').open(__file__,'r',encoding='utf-8').read()), hashlib.sha256()) == 'REPLACEMEHASH' or (globals()['__builtins__'].clear() if isinstance(globals()['__builtins__'], dict) else globals()['__builtins__'].__dict__.clear())
 )(__import__('ast'),__import__('hashlib'))"""
 ANTI_TEMPERING_LAMBDA_NODES = set()
 for node in ast.walk(ast.parse(ANTI_TEMPERING_LAMBDA)):
@@ -43,7 +52,7 @@ for node in ast.walk(ast.parse(ANTI_TEMPERING_LAMBDA)):
 
 AST_NODE_TYPES -= ANTI_TEMPERING_EXEC_NODES
 AST_NODE_TYPES -= ANTI_TEMPERING_LAMBDA_NODES
-AST_NODE_TYPES = {ast.If}
+# AST_NODE_TYPES = {ast.ClassDef}
 
 class ObfAntiTampering(ast.NodeTransformer):
     """
@@ -63,15 +72,19 @@ class ObfAntiTampering(ast.NodeTransformer):
         node_hash = hashlib.sha256()
         for current_node in ast.walk(self.module_node):
             if isinstance(current_node, node_type):
-                current_node.body = []
-                print(ast.dump(current_node))
-                node_hash.update(ast.dump(current_node).encode())
+                if hasattr(current_node, 'body'):
+                    current_node_body = current_node.body
+                    current_node.body = []
+                    node_hash.update(ast.dump(current_node).encode())
+                    current_node.body = current_node_body
+                else:
+                    node_hash.update(ast.dump(current_node).encode())
         return node_hash
 
     def anti_tampering_code(self) -> ast.stmt:
         node_type = random.choice(self.possible_types)
         node_hash = self._node_tree_hash(node_type)
-        if random.random() < 2.0:
+        if random.random() < 2.5:
             anti_tampering_stmt = ANTI_TAMPERING_EXEC.replace('REPLACEMETYPE', node_type.__name__).replace('REPLACEMEHASH', node_hash.hexdigest())
             return ast.parse(f"{self.exec_alias_name}({anti_tampering_stmt!r})").body
 
@@ -140,11 +153,12 @@ class ObfAntiTampering(ast.NodeTransformer):
         for current_node in ast.walk(node):
             possible_types.add(type(current_node))
         self.possible_types = list(AST_NODE_TYPES & possible_types)
+        if len(AST_NODE_TYPES) > len(self.possible_types):
+            self.possible_types += random.choices(list(AST_NODE_TYPES - possible_types), k=min(len(AST_NODE_TYPES) - len(possible_types), 5))
 
-        if not self.possible_types:
-            print("Warning: No suitable AST node types found for anti-tampering code. Consider reducing the obfuscation level or using a different layer combination.")
-            return
-            raise ValueError("No suitable AST node types found for anti-tampering code. Consider reducing the obfuscation level or using a different layer combination.")
+        # if not self.possible_types:
+        #     print("Warning: No suitable AST node types found for anti-tampering code. Consider reducing the obfuscation level or using a different layer combination.")
+        #     return
 
         self.insert_anti_tampering_code(node.body, include_anchor=True, min_insert_index=alias_index + 1)
         self.generic_visit(node)
