@@ -16,7 +16,47 @@ class ObfModuleVariables(ast.NodeTransformer):
         self.current_table_stack = []
 
     def _module_var_exports(self) -> dict:
-        return self.project_context.get('vars', {})
+        return self.project_context.get('symbol_map', {})
+
+    @staticmethod
+    def _entry_name(entry):
+        if isinstance(entry, dict):
+            return entry.get('name')
+        return entry
+
+    @staticmethod
+    def _entry_kind(entry):
+        if isinstance(entry, dict):
+            return entry.get('kind')
+        return None
+
+    def _current_vars_dict(self) -> dict:
+        symbol_map = self.project_context.setdefault('symbol_map', {})
+        if isinstance(symbol_map, dict):
+            return symbol_map
+        return {}
+
+    def _module_var_entry_for_name(self, name: str):
+        module_name = self.module_name
+        if module_name is None:
+            return None
+
+        exports = self._module_var_exports()
+        prefix = f'{module_name}.'
+        for qualified_name, entry in exports.items():
+            if self._entry_kind(entry) not in (None, 'module_var'):
+                continue
+            if not qualified_name.startswith(prefix):
+                continue
+            current_name = self._entry_name(entry)
+            original_name = qualified_name.rsplit('.', 1)[-1]
+            if name == original_name or name == current_name:
+                return qualified_name, current_name
+        return None
+
+    def _set_current_module_var_name(self, qualified_name: str, current_name: str) -> None:
+        exports = self._current_vars_dict()
+        exports[qualified_name] = {'name': current_name, 'kind': 'module_var'}
 
     def _current_module_var_map(self) -> dict:
         module_name = self.module_name
@@ -26,9 +66,13 @@ class ObfModuleVariables(ast.NodeTransformer):
         exports = self._module_var_exports()
         prefix = f'{module_name}.'
         return {
-            qualified_name.rsplit('.', 1)[-1]: obfuscated_name
-            for qualified_name, obfuscated_name in exports.items()
-            if qualified_name.startswith(prefix) and qualified_name.rsplit('.', 1)[-1] not in BUILTINS_DEFAULT
+            qualified_name.rsplit('.', 1)[-1]: self._entry_name(entry)
+            for qualified_name, entry in exports.items()
+            if (
+                qualified_name.startswith(prefix)
+                and qualified_name.rsplit('.', 1)[-1] not in BUILTINS_DEFAULT
+                and self._entry_kind(entry) in (None, 'module_var')
+            )
         }
 
     def _alias_assign(self, original_name: str, obfuscated_name: str, source_node) -> ast.Assign:
@@ -47,8 +91,11 @@ class ObfModuleVariables(ast.NodeTransformer):
             original_name = target.id
             obfuscated_name = module_var_map.get(original_name)
             if obfuscated_name is not None and original_name not in BUILTINS_DEFAULT:
+                entry = self._module_var_entry_for_name(original_name)
                 target.id = obfuscated_name
                 target.ctx = ast.Store()
+                if entry is not None:
+                    self._set_current_module_var_name(entry[0], obfuscated_name)
                 aliases.append(self._alias_assign(original_name, obfuscated_name, source_node))
             return target, aliases
 
@@ -247,8 +294,11 @@ class ObfModuleVariables(ast.NodeTransformer):
             original_name = target.id
             obfuscated_name = module_var_map.get(original_name)
             if obfuscated_name is not None and self._is_global_binding(original_name):
+                entry = self._module_var_entry_for_name(original_name)
                 target.id = obfuscated_name
                 target.ctx = ast.Store()
+                if entry is not None:
+                    self._set_current_module_var_name(entry[0], obfuscated_name)
                 aliases.append(self._alias_assign(original_name, obfuscated_name, source_node))
             return target, aliases
 

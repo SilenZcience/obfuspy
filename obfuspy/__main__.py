@@ -24,22 +24,22 @@ from obfuspy.layers.obfLocalVariables import ObfLocalVariables
 from obfuspy.layers.obfClassNames import ObfClassNames
 
 OBFUSCATION_LAYERS = {
+    'Dead Code':                 ObfDeadCode,
+    'Anti-Debug Statements':     ObfAntiDebugging,
     'Numerical Constants':       ObfNumericalConstants,
     'String Constants':          ObfStringConstants,
     'Docstrings':                ObfDocStrings,
     'Assignements':              ObfAssignements,
     'Type Annotations':          ObfTypeAnnotations,
-    'Anti-Debug Statements':     ObfAntiDebugging,
-    'Anti-Tampering Statements': ObfAntiTampering,
-    'Dead Code':                 ObfDeadCode,
     'Builtins':                  ObfBuiltins,
-    'Imports':                   ObfImports,
     'Function Arguments':        ObfDefArguments,
     'Function Names':            ObfDefnames,
     'Class Names':               ObfClassNames,
     'Local Variables':           ObfLocalVariables,
     'Class Variables':           ObfClassVariables,
     'Module Variables':          ObfModuleVariables,
+    'Imports':                   ObfImports,
+    'Anti-Tampering Statements': ObfAntiTampering,
 }
 
 

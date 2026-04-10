@@ -66,6 +66,9 @@ class ObfAntiDebugging(ast.NodeTransformer):
 
     def anti_debug_code(self) -> ast.stmt:
         if random.random() < 0.5:
+            return ast.parse(random.choice(ANTI_DEBUG_EXEC)).body
+
+        if random.random() < 0.5:
             offset = random.randint(2, 6)
             anti_debug_stmt = random.choice(ANTI_DEBUG_EXEC)
             anti_debug_stmt = ''.join(c + ''.join(random.choice(string.ascii_letters) for _ in range(offset-1)) for c in anti_debug_stmt)

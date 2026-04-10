@@ -18,7 +18,33 @@ class ObfDefArguments(ast.NodeTransformer):
         self.callable_stack = []
 
     def _arg_map_for_qualified(self, qualified_name: str):
-        return self.project_context.get('arg_exports', {}).get(qualified_name)
+        symbol_map = self.project_context.get('symbol_map', {})
+        if not isinstance(symbol_map, dict):
+            return None
+
+        prefix = f'{qualified_name}::arg::'
+        arg_map = {}
+        for key, value in symbol_map.items():
+            if not key.startswith(prefix):
+                continue
+            if isinstance(value, dict) and value.get('kind') != 'arg':
+                continue
+            original_arg = key[len(prefix):]
+            arg_map[original_arg] = value.get('name') if isinstance(value, dict) else value
+        return arg_map or None
+
+    def _current_arg_exports_dict(self) -> dict:
+        symbol_map = self.project_context.setdefault('symbol_map', {})
+        if isinstance(symbol_map, dict):
+            return symbol_map
+        return {}
+
+    def _set_current_arg_map(self, qualified_name: str, arg_map: dict) -> None:
+        if not qualified_name:
+            return
+        exports = self._current_arg_exports_dict()
+        for original_arg, current_arg in arg_map.items():
+            exports[f'{qualified_name}::arg::{original_arg}'] = {'name': current_arg, 'kind': 'arg'}
 
     def _current_callable_qualified_name(self, node):
         parts = [self.module_name] if self.module_name else []
@@ -67,6 +93,9 @@ class ObfDefArguments(ast.NodeTransformer):
             arg_map.update(self._rename_arguments_from_map(node.args.kwonlyargs, exported_arg_map))
             arg_map.update(self._rename_arguments_from_map([node.args.vararg], exported_arg_map))
             arg_map.update(self._rename_arguments_from_map([node.args.kwarg], exported_arg_map))
+
+        if not isinstance(node, ast.Lambda):
+            self._set_current_arg_map(qualified_name, arg_map)
 
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             self.callable_stack.append(node.name)

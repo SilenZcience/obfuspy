@@ -17,40 +17,12 @@ def unicode_compress(bytes):
 def unicode_decompress(b):
     return str().join(chr(((h<<6&64|c&63)+22)%133+10) for h,c in zip(*(iter(b),)*2))
 
-
-class StringUsageFinder(ast.NodeVisitor):
-    """
-    Fast visitor to find first string usage in AST
-    """
-    def __init__(self):
-        self.uses_strings = False
-
-    def generic_visit(self, node):
-        if not self.uses_strings:
-            super().generic_visit(node)
-
-    def visit_Constant(self, node):
-        if isinstance(node.value, str):
-            self.uses_strings = True
-
-    def visit_JoinedStr(self, _):
-        self.uses_strings = True
-
-    def visit_FormattedValue(self, _):
-        self.uses_strings = True
-
-    def check_node(self, node):
-        self.visit(node)
-        return self.uses_strings
-
-
 class ObfStringConstants(ast.NodeTransformer):
     """
     Obfuscates string constants.
     """
     def __init__(self, randomizer: Randomizer, _) -> None:
         self.randomizer = randomizer
-        self.random_str_name = next(randomizer.random_name_gen)
 
     def visit_Module(self, node):
         doc_string = None
@@ -58,16 +30,6 @@ class ObfStringConstants(ast.NodeTransformer):
             isinstance(node.body[0].value, ast.Constant) and
             isinstance(node.body[0].value.value, str)):
             doc_string = node.body.pop(0)
-        finder = StringUsageFinder()
-        insert_position = len(node.body)
-        for i, stmt in enumerate(node.body):
-            if isinstance(stmt, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)) or \
-            finder.check_node(stmt):
-                insert_position = i
-                break
-        node.body[insert_position:insert_position] = ast.parse(
-            f"{self.random_str_name}=lambda s: str().join(chr(ord(c)^((ord(s[0])^(i*31))&0xff)) for i,c in enumerate(s[1:]))"
-        ).body
         self.generic_visit(node)
         if doc_string:
             node.body.insert(0, doc_string)
@@ -126,34 +88,41 @@ class ObfStringConstants(ast.NodeTransformer):
             keywords=[]
         )
 
-    def generate_obfuscated_ast_node(self, s: str):
+    @staticmethod
+    def generate_obfuscated_ast_node(s: str):
         key = sum(map(ord, s)) & 0xff
-        value = chr(key) + ''.join(
-            chr(ord(c) ^ ((key ^ (i * 31)) & 0xff))
+        rint = random.randint(10,100)
+        value = ''.join(
+            chr(ord(c) ^ ((key ^ (i * rint)) & 0xff))
             for i, c in enumerate(s)
         )
-        return ast.Call(
-            func=ast.Name(id=self.random_str_name, ctx=ast.Load()),
-            args=[ast.Constant(
-                value=value
-            )],
-            keywords=[],
-        )
+        ridx = random.randint(0, len(s))
+        value = value[:ridx] + chr(key) + value[ridx:]
+        return ast.parse(
+            f"(lambda s: str().join(chr(ord(c)^((ord(s[{ridx}])^(i*{rint}))&0xff)) for i,c in enumerate(s[:{ridx}]+s[{ridx+1}:])))({value!r})",
+            mode='eval'
+        ).body
 
-    def generate_compressed_logic(self, s: str):
+    @staticmethod
+    def generate_compressed_logic(s: str):
         compressed = unicode_compress(s.encode('utf-8'))
         decompressed = unicode_decompress(compressed)
         if decompressed != s:
             raise ValueError
         return ast.parse(f"str().join(chr(((h<<6&64|c&63)+22)%133+10) for h,c in zip(*(iter({compressed!r}),)*2))", mode='eval').body
 
+    @staticmethod
+    def obf_string_node(node):
+        if random.random() < 0.7:
+            return ObfStringConstants.generate_obfuscated_ast_node(node.value)
+        try:
+            return ObfStringConstants.generate_compressed_logic(node.value)
+        except ValueError:
+            return ObfStringConstants.generate_obfuscated_ast_node(node.value)
+
     def visit_Constant(self, node):
         if isinstance(node.value, str):
-            if random.random() < 0.7:
-                return self.generate_obfuscated_ast_node(node.value)
-            try:
-                return self.generate_compressed_logic(node.value)
-            except ValueError:
-                return self.generate_obfuscated_ast_node(node.value)
-
+            if node.value == ';;REPLACEMEHASH':
+                return node
+            return self.obf_string_node(node)
         return node

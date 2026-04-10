@@ -5,11 +5,13 @@ obfuscator
 import ast
 import os
 import symtable
+from obfuspy.layers.obfBuiltins import ObfBuiltins
 from obfuspy.util.charsets import CHARSETS
 from obfuspy.util.randomizer import Randomizer
 from obfuspy.util.randomizer import ALL_BUILTINS
 from obfuspy.util.unparser import unparse
 from obfuspy.layers.obfStringConstants import ObfStringConstants
+from obfuspy.layers.obfNumericalConstants import ObfNumericalConstants
 from obfuspy.layers.obfAntiTampering import ObfAntiTampering
 from obfuspy.layers.obfDefArguments import ObfDefArguments
 from obfuspy.layers.obfDefNames import ObfDefnames
@@ -113,9 +115,6 @@ class Obfuscator:
 
         return export_map
 
-    @staticmethod
-    def _reverse_export_map(export_map: dict) -> dict:
-        return {obfuscated_name: qualified_name for qualified_name, obfuscated_name in export_map.items()}
 
     @staticmethod
     def _collect_used_keyword_argument_names(file_modules) -> set:
@@ -132,10 +131,6 @@ class Obfuscator:
         return used
 
     @staticmethod
-    def _should_rename_class_var(name: str) -> bool:
-        return not name.startswith('__')
-
-    @staticmethod
     def _collect_target_names(target) -> list:
         names = []
         if isinstance(target, ast.Name):
@@ -146,39 +141,60 @@ class Obfuscator:
         return names
 
     @staticmethod
-    def _collect_class_var_exports_from_body(class_path: str, body: list, randomizer: Randomizer, export_map: dict) -> None:
-        for stmt in body:
-            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                continue
-            if isinstance(stmt, ast.ClassDef):
-                nested_path = f'{class_path}.{stmt.name}'
-                Obfuscator._collect_class_var_exports_from_body(nested_path, stmt.body, randomizer, export_map)
-                continue
-
-            if isinstance(stmt, ast.Assign):
-                for target in stmt.targets:
-                    for name in Obfuscator._collect_target_names(target):
-                        if Obfuscator._should_rename_class_var(name):
-                            export_map[f'{class_path}.{name}'] = next(randomizer.random_name_gen)
-            elif isinstance(stmt, ast.AnnAssign):
-                for name in Obfuscator._collect_target_names(stmt.target):
-                    if Obfuscator._should_rename_class_var(name):
-                        export_map[f'{class_path}.{name}'] = next(randomizer.random_name_gen)
-            elif isinstance(stmt, ast.AugAssign):
-                for name in Obfuscator._collect_target_names(stmt.target):
-                    if Obfuscator._should_rename_class_var(name):
-                        export_map[f'{class_path}.{name}'] = next(randomizer.random_name_gen)
-
-            for field_name in ('body', 'orelse', 'finalbody'):
-                child_body = getattr(stmt, field_name, None)
-                if child_body:
-                    Obfuscator._collect_class_var_exports_from_body(class_path, child_body, randomizer, export_map)
-            for handler in getattr(stmt, 'handlers', []):
-                Obfuscator._collect_class_var_exports_from_body(class_path, handler.body, randomizer, export_map)
-
-    @staticmethod
     def _collect_class_var_exports(file_modules, randomizer: Randomizer) -> dict:
         export_map = {}
+
+        def collect_in_class_body(class_path: str, body: list) -> None:
+            for stmt in body:
+                if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    callable_parts = [*class_path.split('.'), stmt.name]
+                    for child in stmt.body:
+                        walk(child, callable_parts)
+                    continue
+
+                if isinstance(stmt, ast.ClassDef):
+                    nested_path = f'{class_path}.{stmt.name}'
+                    collect_in_class_body(nested_path, stmt.body)
+                    continue
+
+                if isinstance(stmt, ast.Assign):
+                    for target in stmt.targets:
+                        for name in Obfuscator._collect_target_names(target):
+                            export_map[f'{class_path}.{name}'] = next(randomizer.random_name_gen)
+                elif isinstance(stmt, ast.AnnAssign):
+                    for name in Obfuscator._collect_target_names(stmt.target):
+                        export_map[f'{class_path}.{name}'] = next(randomizer.random_name_gen)
+                elif isinstance(stmt, ast.AugAssign):
+                    for name in Obfuscator._collect_target_names(stmt.target):
+                        export_map[f'{class_path}.{name}'] = next(randomizer.random_name_gen)
+
+                for field_name in ('body', 'orelse', 'finalbody'):
+                    child_body = getattr(stmt, field_name, None)
+                    if child_body:
+                        collect_in_class_body(class_path, child_body)
+                for handler in getattr(stmt, 'handlers', []):
+                    collect_in_class_body(class_path, handler.body)
+
+        def walk(node, prefix_parts: list) -> None:
+            if isinstance(node, ast.ClassDef):
+                class_parts = [*prefix_parts, node.name]
+                collect_in_class_body('.'.join(class_parts), node.body)
+                return
+
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                callable_parts = [*prefix_parts, node.name]
+                for child in node.body:
+                    walk(child, callable_parts)
+                return
+
+            for field_name in ('body', 'orelse', 'finalbody'):
+                child_body = getattr(node, field_name, None)
+                if child_body:
+                    for child in child_body:
+                        walk(child, prefix_parts)
+            for handler in getattr(node, 'handlers', []):
+                for child in handler.body:
+                    walk(child, prefix_parts)
 
         for file_module in file_modules:
             module_name = getattr(file_module, 'module_name', None)
@@ -187,9 +203,7 @@ class Obfuscator:
                 continue
 
             for node in tree.body:
-                if isinstance(node, ast.ClassDef):
-                    class_path = f'{module_name}.{node.name}'
-                    Obfuscator._collect_class_var_exports_from_body(class_path, node.body, randomizer, export_map)
+                walk(node, [module_name])
 
         return export_map
 
@@ -360,48 +374,71 @@ class Obfuscator:
         randomizer.project_context = {
             'root_path': common_root,
             'module_names': {file_module.in_path: file_module.module_name for file_module in file_modules},
-            'exports': {},
-            'reverse_exports': {},
-            'arg_exports': {},
+            'symbol_map': {},
             'keyword_args_in_calls': set(),
-            'class_vars': {},
-            'vars': {},
+            'enabled_layers': {},
         }
 
         has_function_layer = any(layer is ObfDefnames for layer, _ in settings['obf_layers'])
         has_class_layer = any(layer is ObfClassNames for layer, _ in settings['obf_layers'])
+        has_class_var_layer = any(layer is ObfClassVariables for layer, _ in settings['obf_layers'])
+        has_module_var_layer = any(layer is ObfModuleVariables for layer, _ in settings['obf_layers'])
+        has_argument_layer = any(layer is ObfDefArguments for layer, _ in settings['obf_layers'])
+
+        randomizer.project_context['enabled_layers'] = {
+            'functions': has_function_layer,
+            'classes': has_class_layer,
+            'class_vars': has_class_var_layer,
+            'module_vars': has_module_var_layer,
+            'arguments': has_argument_layer,
+        }
+
+        symbol_map = randomizer.project_context['symbol_map']
+        function_export_map = {}
+
         if has_function_layer or has_class_layer:
-            randomizer.project_context['exports'] = Obfuscator._collect_project_exports(
+            export_map = Obfuscator._collect_project_exports(
                 file_modules,
                 randomizer,
                 include_functions=has_function_layer,
                 include_classes=has_class_layer,
             )
-            randomizer.project_context['reverse_exports'] = Obfuscator._reverse_export_map(randomizer.project_context['exports'])
+            function_export_map = export_map
+            for qualified_name, current_name in export_map.items():
+                symbol_map[qualified_name] = {'name': current_name, 'kind': 'export'}
 
-        has_class_var_layer = any(layer is ObfClassVariables for layer, _ in settings['obf_layers'])
         if has_class_var_layer:
-            randomizer.project_context['class_vars'] = Obfuscator._collect_class_var_exports(file_modules, randomizer)
+            class_var_map = Obfuscator._collect_class_var_exports(file_modules, randomizer)
+            for qualified_name, current_name in class_var_map.items():
+                symbol_map[qualified_name] = {'name': current_name, 'kind': 'class_var'}
 
-        has_module_var_layer = any(layer is ObfModuleVariables for layer, _ in settings['obf_layers'])
         if has_module_var_layer:
-            randomizer.project_context['vars'] = Obfuscator._collect_module_var_exports(file_modules, randomizer)
+            module_var_map = Obfuscator._collect_module_var_exports(file_modules, randomizer)
+            for qualified_name, current_name in module_var_map.items():
+                symbol_map[qualified_name] = {'name': current_name, 'kind': 'module_var'}
 
-        has_argument_layer = any(layer is ObfDefArguments for layer, _ in settings['obf_layers'])
         if has_argument_layer:
             randomizer.project_context['keyword_args_in_calls'] = Obfuscator._collect_used_keyword_argument_names(file_modules)
-            randomizer.project_context['arg_exports'] = Obfuscator._collect_argument_exports(
+            arg_exports = Obfuscator._collect_argument_exports(
                 file_modules,
                 randomizer,
-                randomizer.project_context['exports']
+                function_export_map,
             )
+            for qualified_name, arg_map in arg_exports.items():
+                for original_arg, current_arg in arg_map.items():
+                    symbol_map[f'{qualified_name}::arg::{original_arg}'] = {'name': current_arg, 'kind': 'arg'}
 
-        anti_tampering = None
+        for layer, args in settings['obf_layers']:
+            print('Obfuscation layer:', layer.__name__)
+            for file_module in file_modules:
+                print('Obfuscating file:', file_module.in_path)
+                l = layer(randomizer, file_module, *args)
+                l.visit(file_module.tree)
+                if any(isinstance(l, obfLayer) for obfLayer in (ObfStringConstants, ObfNumericalConstants, ObfBuiltins)):
+                    ObfAntiTampering.HASH_NODES[file_module] = {k: v+[l] for k, v in ObfAntiTampering.HASH_NODES[file_module].items()}
+
+
         for file_module in file_modules:
-            print('Obfuscating file:', file_module.in_path)
-            for layer, args in settings['obf_layers']:
-                print('Obfuscation layer:', layer.__name__)
-                layer(randomizer, file_module, *args).visit(file_module.tree)
             out_code = unparse(file_module.tree, settings['indentation'])
 
             if settings['random_comment_length']:
@@ -411,4 +448,7 @@ class Obfuscator:
                     file_module_lines[i] += f"#{rnd_cmt}"
                 out_code = '\n'.join(file_module_lines)
 
-            file_module.set_code(prefix + out_code + post_fix)
+            out_code = prefix + out_code + post_fix
+            out_code = ObfAntiTampering.finalize_hash_nodes(out_code, file_module)
+
+            file_module.set_code(out_code)

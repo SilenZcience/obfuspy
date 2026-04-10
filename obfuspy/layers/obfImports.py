@@ -2,40 +2,60 @@ import ast
 from obfuspy.util.randomizer import Randomizer
 
 
-
 class ObfImports(ast.NodeTransformer):
     """
     Obfuscates import-statements.
     """
+
     def __init__(self, randomizer: Randomizer, file_module) -> None:
         self.randomizer = randomizer
         self.file_module = file_module
+        self.project_context = getattr(randomizer, 'project_context', {})
         self.import_map = {}
         self.binding_map = {}
-        self.project_context = getattr(randomizer, 'project_context', {})
         self.explicit_global_stack = []
+        self.scope_name_stack = []
 
     def _resolve_import_module(self, node) -> str:
         module_name = getattr(self.file_module, 'module_name', None)
+        node_module = getattr(node, 'module', None)
         if module_name is None:
-            return node.module
+            return node_module
 
         current_parts = module_name.split('.')
         base_parts = current_parts[:-1]
+        level = getattr(node, 'level', 0)
 
-        if node.level > 1:
-            base_parts = base_parts[:max(0, len(base_parts) - (node.level - 1))]
+        if level > 1:
+            base_parts = base_parts[:max(0, len(base_parts) - (level - 1))]
 
         module_parts = list(base_parts)
-        if node.module:
-            module_parts.extend(node.module.split('.'))
+        if node_module:
+            module_parts.extend(node_module.split('.'))
         return '.'.join(part for part in module_parts if part)
 
     def _export_name(self, qualified_name: str):
-        exports = self.project_context.get('exports', {})
-        class_vars = self.project_context.get('class_vars', {})
-        module_vars = self.project_context.get('vars', {})
-        return exports.get(qualified_name) or class_vars.get(qualified_name) or module_vars.get(qualified_name)
+        entry = self.project_context.get('symbol_map', {}).get(qualified_name)
+        if isinstance(entry, dict):
+            return entry.get('name')
+        return entry
+
+    def _qualified_name(self, *parts) -> str:
+        return '.'.join(part for part in parts if part)
+
+    def _scope_key(self) -> tuple:
+        return tuple(self.scope_name_stack)
+
+    def _register_import(self, scope_key: tuple, original_name: str, local_name: str) -> None:
+        self.import_map.setdefault(scope_key, {})[original_name] = local_name
+
+    def _lookup_import(self, original_name: str):
+        for end_index in range(len(self.scope_name_stack), -1, -1):
+            scope_key = tuple(self.scope_name_stack[:end_index])
+            scope_map = self.import_map.get(scope_key)
+            if scope_map is not None and original_name in scope_map:
+                return scope_map[original_name]
+        return None
 
     def _local_import_name(self, preferred_name: str) -> str:
         generated_name = next(self.randomizer.random_name_gen)
@@ -43,23 +63,85 @@ class ObfImports(ast.NodeTransformer):
             generated_name = next(self.randomizer.random_name_gen)
         return generated_name
 
+    def _collect_import_bindings(self, node) -> None:
+        if isinstance(node, ast.ClassDef):
+            self.scope_name_stack.append(node.name)
+            for child in node.body:
+                self._collect_import_bindings(child)
+            self.scope_name_stack.pop()
+            return
+
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            self.scope_name_stack.append(node.name)
+            for child in node.body:
+                self._collect_import_bindings(child)
+            self.scope_name_stack.pop()
+            return
+
+        if isinstance(node, ast.Import):
+            scope_key = self._scope_key()
+            for name in node.names:
+                original_bound_name = name.asname or name.name.split('.')[0]
+                if name.asname is None and '.' in name.name:
+                    continue
+                local_name = self._local_import_name(name.name.split('.')[-1])
+                self._register_import(scope_key, original_bound_name, local_name)
+                self.binding_map[local_name] = self._qualified_name(self._resolve_import_module(node), name.name)
+            return
+
+        if isinstance(node, ast.ImportFrom):
+            scope_key = self._scope_key()
+            resolved_module = self._resolve_import_module(node)
+            for name in node.names:
+                if name.name == '*':
+                    continue
+                original_bound_name = name.asname or name.name
+                qualified_name = f'{resolved_module}.{name.name}' if resolved_module else name.name
+                export_name = self._export_name(qualified_name)
+                imported_symbol_name = export_name if export_name is not None else name.name
+                local_name = self._local_import_name(imported_symbol_name)
+                self._register_import(scope_key, original_bound_name, local_name)
+                self.binding_map[local_name] = qualified_name
+            return
+
+        for field_name in ('body', 'orelse', 'finalbody'):
+            child_body = getattr(node, field_name, None)
+            if child_body:
+                for child in child_body:
+                    self._collect_import_bindings(child)
+        for handler in getattr(node, 'handlers', []):
+            for child in handler.body:
+                self._collect_import_bindings(child)
+
     def visit_Module(self, node):
         self.import_map = {}
         self.binding_map = {}
         self.explicit_global_stack = []
+        self.scope_name_stack = []
+        self._collect_import_bindings(node)
         self.generic_visit(node)
+        return node
+
+    def visit_ClassDef(self, node):
+        self.scope_name_stack.append(node.name)
+        self.generic_visit(node)
+        self.scope_name_stack.pop()
         return node
 
     def visit_FunctionDef(self, node):
+        self.scope_name_stack.append(node.name)
         self.explicit_global_stack.append(set())
         self.generic_visit(node)
         self.explicit_global_stack.pop()
+        self.scope_name_stack.pop()
         return node
 
     def visit_AsyncFunctionDef(self, node):
+        self.scope_name_stack.append(node.name)
         self.explicit_global_stack.append(set())
         self.generic_visit(node)
         self.explicit_global_stack.pop()
+        self.scope_name_stack.pop()
         return node
 
     def _in_module_scope(self) -> bool:
@@ -71,13 +153,20 @@ class ObfImports(ast.NodeTransformer):
     def visit_Import(self, node):
         for name in node.names:
             original_bound_name = name.asname or name.name.split('.')[0]
+            local_name = self._lookup_import(original_bound_name)
+
+            if local_name is None:
+                if name.asname is None and '.' in name.name:
+                    self.binding_map[original_bound_name] = self._qualified_name(self._resolve_import_module(node), name.name)
+                    continue
+                local_name = self._local_import_name(name.name.split('.')[-1])
+                self._register_import(self._scope_key(), original_bound_name, local_name)
+                self.binding_map[local_name] = self._qualified_name(self._resolve_import_module(node), name.name)
+
             if name.asname is None and '.' in name.name:
-                self.binding_map[original_bound_name] = name.name
                 continue
-            local_name = self._local_import_name(name.name.split('.')[-1])
-            self.import_map[original_bound_name] = local_name
+
             name.asname = local_name
-            self.binding_map[local_name] = name.name
         return node
 
     def visit_ImportFrom(self, node):
@@ -85,14 +174,18 @@ class ObfImports(ast.NodeTransformer):
         for name in node.names:
             if name.name == '*':
                 continue
+
             original_bound_name = name.asname or name.name
             qualified_name = f'{resolved_module}.{name.name}' if resolved_module else name.name
             export_name = self._export_name(qualified_name)
             imported_symbol_name = export_name if export_name is not None else name.name
-            local_name = self._local_import_name(imported_symbol_name)
 
-            self.import_map[original_bound_name] = local_name
-            self.binding_map[local_name] = qualified_name
+            local_name = self._lookup_import(original_bound_name)
+            if local_name is None:
+                local_name = self._local_import_name(imported_symbol_name)
+                self._register_import(self._scope_key(), original_bound_name, local_name)
+                self.binding_map[local_name] = qualified_name
+
             name.name = imported_symbol_name
             name.asname = local_name
         return node
@@ -103,8 +196,9 @@ class ObfImports(ast.NodeTransformer):
         for name in node.names:
             if current_globals is not None:
                 current_globals.add(name)
-            if name in self.import_map:
-                mapped = self.import_map[name]
+
+            mapped = self._lookup_import(name)
+            if mapped is not None:
                 new_names.append(mapped)
                 if current_globals is not None:
                     current_globals.add(mapped)
@@ -116,8 +210,9 @@ class ObfImports(ast.NodeTransformer):
     def visit_Nonlocal(self, node):
         new_names = []
         for name in node.names:
-            if name in self.import_map:
-                new_names.append(self.import_map[name])
+            mapped = self._lookup_import(name)
+            if mapped is not None:
+                new_names.append(mapped)
             else:
                 new_names.append(name)
         node.names = new_names
@@ -152,18 +247,14 @@ class ObfImports(ast.NodeTransformer):
         return node
 
     def visit_Name(self, node):
-        if node.id not in self.import_map:
+        mapped_name = self._lookup_import(node.id)
+        if mapped_name is None:
             return node
 
         if isinstance(node.ctx, ast.Load):
-            return ast.Name(
-                id=self.import_map[node.id],
-                ctx=node.ctx
-            )
+            return ast.Name(id=mapped_name, ctx=node.ctx)
 
         if isinstance(node.ctx, ast.Store) and (self._in_module_scope() or self._is_explicit_global_name(node.id)):
-            return ast.Name(
-                id=self.import_map[node.id],
-                ctx=node.ctx
-            )
+            return ast.Name(id=mapped_name, ctx=node.ctx)
+
         return node

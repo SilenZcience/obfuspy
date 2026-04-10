@@ -120,4 +120,7 @@ class Randomizer:
             if lines[i].strip():
                 yield f"{next(self.random_comment_gen)}"
             else:
-                yield f"{random.choice(lines)}"
+                r_line = random.choice(lines)
+                while ';;REPLACEMEHASH' in r_line:
+                    r_line = random.choice(lines)
+                yield f"{r_line}"
