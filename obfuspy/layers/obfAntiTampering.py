@@ -28,7 +28,7 @@ AST_NODE_TYPES = {
     ast.FunctionDef,
     ast.AsyncFunctionDef, # TODO: gets fucked by dead code
 }# TODO: this is too weak
-
+# TODO: more variety
 # exit(0)
 # verify:
 # with open(__file__, 'r', encoding='utf-8') as f:
@@ -36,37 +36,38 @@ AST_NODE_TYPES = {
 # # (_ for _ in ()).throw(SystemExit(55))
 # # (globals()['__builtins__'].clear() if isinstance(globals()['__builtins__'], dict) else globals()['__builtins__'].__dict__.clear())
 
-ANTI_TAMPERING_EXEC = """import ast, hashlib
-source = __import__('builtins').open(__file__, 'r', encoding='utf-8').read()
-tree = ast.parse(source)
-h = hashlib.sha256()
-hattr = __import__('builtins').hasattr
-for node in ast.walk(tree):
-    if isinstance(node, ast.REPLACEMETYPE):
-        if hattr(node, 'body'):
-            node.body = []
-        h.update(ast.dump(node).encode())
-if h.hexdigest() != 'REPLACEMEHASH':
-    (globals()['__builtins__'].clear() if isinstance(globals()['__builtins__'], dict) else globals()['__builtins__'].__dict__.clear())
-"""
+# TODO: should not use import!
+# ANTI_TAMPERING_EXEC = """import ast, hashlib
+# source = __import__('builtins').open(__file__, 'r', encoding='utf-8').read()
+# tree = ast.parse(source)
+# h = hashlib.sha256()
+# hattr = __import__('builtins').hasattr
+# for node in ast.walk(tree):
+#     if isinstance(node, ast.REPLACEMETYPE):
+#         if hattr(node, 'body'):
+#             node.body = []
+#         h.update(ast.dump(node).encode())
+# if h.hexdigest() != 'REPLACEMEHASH':
+#     (globals()['__builtins__'].clear() if isinstance(globals()['__builtins__'], dict) else globals()['__builtins__'].__dict__.clear())
+# """
 # ANTI_TEMPERING_EXEC_NODES = set()
 # for node in ast.walk(ast.parse(ANTI_TAMPERING_EXEC)):
 #     ANTI_TEMPERING_EXEC_NODES.add(type(node))
 
-ANTI_TEMPERING_LAMBDA = """(
-    lambda ast,hashlib,builtins:
-    (
-        lambda tree,h:
-        (
-            [
-                (builtins.hasattr(node, 'body') and builtins.setattr(node,'body',[]), h.update(ast.dump(node).encode()))
-                for node in ast.walk(tree)
-                if isinstance(node,ast.REPLACEMETYPE)
-            ],
-            h.hexdigest()
-        )[1]
-    )(ast.parse(builtins.open(__file__,'r',encoding='utf-8').read()), hashlib.sha256()) == 'REPLACEMEHASH' or (globals()['__builtins__'].clear() if isinstance(globals()['__builtins__'], dict) else globals()['__builtins__'].__dict__.clear())
-)(__import__('ast'),__import__('hashlib'),__import__('builtins'))"""
+# ANTI_TEMPERING_LAMBDA = """(
+#     lambda ast,hashlib,builtins:
+#     (
+#         lambda tree,h:
+#         (
+#             [
+#                 (builtins.hasattr(node, 'body') and builtins.setattr(node,'body',[]), h.update(ast.dump(node).encode()))
+#                 for node in ast.walk(tree)
+#                 if isinstance(node,ast.REPLACEMETYPE)
+#             ],
+#             h.hexdigest()
+#         )[1]
+#     )(ast.parse(builtins.open(__file__,'r',encoding='utf-8').read()), hashlib.sha256()) == 'REPLACEMEHASH' or (globals()['__builtins__'].clear() if isinstance(globals()['__builtins__'], dict) else globals()['__builtins__'].__dict__.clear())
+# )(__import__('ast'),__import__('hashlib'),__import__('builtins'))""" # TODO: variables need to be unique (next())
 # ANTI_TEMPERING_LAMBDA_NODES = set()
 # for node in ast.walk(ast.parse(ANTI_TEMPERING_LAMBDA)):
 #     ANTI_TEMPERING_LAMBDA_NODES.add(type(node))
@@ -83,7 +84,7 @@ class ObfAntiTampering(ast.NodeTransformer):
     def __init__(self, randomizer, file_module, probability: float) -> None:
         self.randomizer = randomizer
         self.file_module = file_module
-        ObfAntiTampering.HASH_NODES[file_module] = {}
+        ObfAntiTampering.HASH_NODES[file_module] = ObfAntiTampering.HASH_NODES.get(file_module, {})
         self.probability = probability
         self.exec_alias_name = next(self.randomizer.random_name_gen)
         while self.exec_alias_name == 'exec':

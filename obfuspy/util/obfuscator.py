@@ -429,13 +429,12 @@ class Obfuscator:
                     symbol_map[f'{qualified_name}::arg::{original_arg}'] = {'name': current_arg, 'kind': 'arg'}
 
         for layer, args in settings['obf_layers']:
-            print('Obfuscation layer:', layer.__name__)
             for file_module in file_modules:
-                print('Obfuscating file:', file_module.in_path)
+                print(layer.__name__, file_module.in_path)
                 l = layer(randomizer, file_module, *args)
                 l.visit(file_module.tree)
                 if any(isinstance(l, obfLayer) for obfLayer in (ObfStringConstants, ObfNumericalConstants, ObfBuiltins)):
-                    ObfAntiTampering.HASH_NODES[file_module] = {k: v+[l] for k, v in ObfAntiTampering.HASH_NODES[file_module].items()}
+                    ObfAntiTampering.HASH_NODES[file_module] = {k: v+[l] for k, v in ObfAntiTampering.HASH_NODES.get(file_module, {}).items()}
 
 
         for file_module in file_modules:
@@ -448,6 +447,7 @@ class Obfuscator:
                     file_module_lines[i] += f"#{rnd_cmt}"
                 out_code = '\n'.join(file_module_lines)
 
+            print('Finalizing file: ', file_module.in_path)
             out_code = prefix + out_code + post_fix
             out_code = ObfAntiTampering.finalize_hash_nodes(out_code, file_module)
 

@@ -49,7 +49,7 @@ class ObfDeadCode(ast.NodeTransformer):
         ]
         return random.choice(choices)()
 
-    def dead_expressions(self) -> ast.stmt:
+    def dead_expressions(self) -> ast.stmt: # TODO: more, loops etc, better integrated logic
         choices = [
             # Unused variable assignment with number
             lambda: ast.Assign(

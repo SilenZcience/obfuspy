@@ -3,7 +3,7 @@ import random
 from obfuspy.util.randomizer import Randomizer
 
 
-class ObfDocStrings(ast.NodeTransformer):
+class ObfDocStrings(ast.NodeTransformer): # TODO: maybe confusing text instead of gibberish
     """
     Obfuscates docstrings (__doc__).
     """

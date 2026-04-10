@@ -114,13 +114,13 @@ class Randomizer:
 
 
 
-    def generate_random_comments(self, code: str):
+    def generate_random_comments(self, code: str): # TODO: random also no quotes otherwise it can fuck up docstrings
         lines = code.split('\n')
         for i, _ in enumerate(lines):
-            if lines[i].strip():
-                yield f"{next(self.random_comment_gen)}"
-            else:
-                r_line = random.choice(lines)
-                while ';;REPLACEMEHASH' in r_line:
-                    r_line = random.choice(lines)
-                yield f"{r_line}"
+            yield f"{next(self.random_comment_gen)}"
+            # if lines[i].strip():
+            # else:
+            #     r_line = random.choice(lines)
+            #     while ';;REPLACEMEHASH' in r_line:
+            #         r_line = random.choice(lines)
+            #     yield f"{r_line}"

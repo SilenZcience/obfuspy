@@ -2,7 +2,7 @@ import ast
 from obfuspy.util.randomizer import Randomizer, BUILTINS_DEFAULT
 
 
-class ObfClassNames(ast.NodeTransformer):
+class ObfClassNames(ast.NodeTransformer): # TODO: verify
     """
     Obfuscates class names.
     """

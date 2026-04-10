@@ -3,7 +3,7 @@ import random
 from obfuspy.util.randomizer import Randomizer, BUILTINS_DEFAULT
 
 
-class ObfDefnames(ast.NodeTransformer):
+class ObfDefnames(ast.NodeTransformer): # TODO: verify
     """
     Obfuscates function names.
     """

@@ -3,15 +3,15 @@ import random
 import string
 
 
-ANTI_DEBUG_EXEC = [
+ANTI_DEBUG_EXEC = [ # TODO: more variety
 #     """import sys
 # if sys.gettrace() is not None: sys.exit(0)
 # """,
-    """import sys
-if sys.gettrace() is not None:
-    b = globals()['__builtins__']
-    if isinstance(b,dict): b.clear()
-    else: b.__dict__.clear()
+    """
+if __import__('sys').gettrace() is not None:
+    {0} = globals()['__builtins__']
+    if isinstance({0},dict): {0}.clear()
+    else: {0}.__dict__.clear()
 """,
 #     """import inspect
 # for frame in inspect.stack():
@@ -19,14 +19,14 @@ if sys.gettrace() is not None:
 #     for keyword in {"pdb","bdb","ipdb","pudb","rpdb","wdb","pydevd","debugpy","ptvsd"}:
 #         if keyword in frame_filename: raise SystemExit(0)
 # """,
-    """import inspect
-for frame in inspect.stack():
-    frame_filename = frame.filename.lower()
-    for keyword in {"pdb","bdb","ipdb","pudb","rpdb","wdb","pydevd","debugpy","ptvsd"}:
-        if keyword in frame_filename:
-            b = globals()['__builtins__']
-            if isinstance(b,dict): b.clear()
-            else: b.__dict__.clear()
+    """
+for {0} in __import__('inspect').stack():
+    {1} = {0}.filename.lower()
+    for {2} in {{"pdb","bdb","ipdb","pudb","rpdb","wdb","pydevd","debugpy","ptvsd"}}:
+        if {2} in {1}:
+            {3} = globals()['__builtins__']
+            if isinstance({3},dict): {3}.clear()
+            else: {3}.__dict__.clear()
             break
 """,
 #     """import sys
@@ -35,14 +35,14 @@ for frame in inspect.stack():
 #     for dbg in {"pdb","bdb","ipdb","pudb","rpdb","wdb","pydevd","debugpy","ptvsd"}:
 #         if dbg in module_name: sys.exit(0)
 # """,
-    """import sys
-for name in sys.modules:
-    module_name = name.lower()
-    for dbg in {"pdb","bdb","ipdb","pudb","rpdb","wdb","pydevd","debugpy","ptvsd"}:
-        if dbg in module_name:
-            b = globals()['__builtins__']
-            if isinstance(b,dict): b.clear()
-            else: b.__dict__.clear()
+    """
+for {0} in __import__('sys').modules:
+    {1} = {0}.lower()
+    for {2} in {{"pdb","bdb","ipdb","pudb","rpdb","wdb","pydevd","debugpy","ptvsd"}}:
+        if {2} in {1}:
+            {3} = globals()['__builtins__']
+            if isinstance({3},dict): {3}.clear()
+            else: {3}.__dict__.clear()
             break
 """,
 ] # beware that iterative variables make problems inside class bodies
@@ -65,12 +65,22 @@ class ObfAntiDebugging(ast.NodeTransformer):
             self.exec_alias_name = next(self.randomizer.random_name_gen)
 
     def anti_debug_code(self) -> ast.stmt:
-        if random.random() < 0.5:
-            return ast.parse(random.choice(ANTI_DEBUG_EXEC)).body
+        if random.random() < 1.5:
+            return ast.parse(random.choice(ANTI_DEBUG_EXEC).format(
+                next(self.randomizer.random_name_gen),
+                next(self.randomizer.random_name_gen),
+                next(self.randomizer.random_name_gen),
+                next(self.randomizer.random_name_gen),
+            )).body
 
         if random.random() < 0.5:
             offset = random.randint(2, 6)
-            anti_debug_stmt = random.choice(ANTI_DEBUG_EXEC)
+            anti_debug_stmt = random.choice(ANTI_DEBUG_EXEC).format(
+                next(self.randomizer.random_name_gen),
+                next(self.randomizer.random_name_gen),
+                next(self.randomizer.random_name_gen),
+                next(self.randomizer.random_name_gen),
+            )
             anti_debug_stmt = ''.join(c + ''.join(random.choice(string.ascii_letters) for _ in range(offset-1)) for c in anti_debug_stmt)
             return ast.parse(f"{self.exec_alias_name}({anti_debug_stmt!r}[::{offset}])").body
 

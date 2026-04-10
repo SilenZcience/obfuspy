@@ -2,7 +2,7 @@ import ast
 from obfuspy.util.randomizer import Randomizer
 
 
-class ObfClassVariables(ast.NodeTransformer):
+class ObfClassVariables(ast.NodeTransformer): # TODO: verify
     """
     Obfuscates class variables.
     """
@@ -16,6 +16,9 @@ class ObfClassVariables(ast.NodeTransformer):
         self.scope_name_stack = []
         self.class_name_stack = []
         self.class_path_stack = []
+        # Caches for performance
+        self._cached_class_var_map = None
+        self._cached_entry_for_name = {}
 
     def _qualified_name(self, *parts) -> str:
         return '.'.join(part for part in parts if part)
@@ -42,8 +45,14 @@ class ObfClassVariables(ast.NodeTransformer):
         return {}
 
     def _class_var_entry_for_name(self, name: str):
+        # Use cache to avoid repeated lookups
+        cache = self._cached_entry_for_name
         class_path = self._current_class_path()
+        cache_key = (class_path, name)
+        if cache_key in cache:
+            return cache[cache_key]
         if class_path is None:
+            cache[cache_key] = None
             return None
 
         exports = self._class_var_exports()
@@ -56,7 +65,9 @@ class ObfClassVariables(ast.NodeTransformer):
             current_name = self._entry_name(entry)
             original_name = qualified_name.rsplit('.', 1)[-1]
             if name == original_name or name == current_name:
-                return qualified_name, current_name
+                cache[cache_key] = (qualified_name, current_name)
+                return cache[cache_key]
+        cache[cache_key] = None
         return None
 
     def _set_current_class_var_name(self, qualified_name: str, current_name: str) -> None:
@@ -70,17 +81,28 @@ class ObfClassVariables(ast.NodeTransformer):
         return self.class_name_stack[-1] if self.class_name_stack else None
 
     def _current_class_var_map(self) -> dict:
+        # Cache the map for the current class path
         class_path = self._current_class_path()
+        if self._cached_class_var_map is not None:
+            cached_path, cached_map = self._cached_class_var_map
+            if cached_path == class_path:
+                return cached_map
         if class_path is None:
+            self._cached_class_var_map = (class_path, {})
             return {}
 
         exports = self._class_var_exports()
         prefix = f'{class_path}.'
-        return {
+        result = {
             qualified_name.rsplit('.', 1)[-1]: self._entry_name(entry)
             for qualified_name, entry in exports.items()
             if qualified_name.startswith(prefix) and self._entry_kind(entry) in (None, 'class_var')
         }
+        self._cached_class_var_map = (class_path, result)
+        return result
+    def _invalidate_caches(self):
+        self._cached_class_var_map = None
+        self._cached_entry_for_name.clear()
 
     def _alias_assign(self, original_name: str, obfuscated_name: str, source_node) -> ast.Assign:
         return ast.Assign(
@@ -98,6 +120,7 @@ class ObfClassVariables(ast.NodeTransformer):
         self.scope_name_stack = []
         self.class_name_stack = []
         self.class_path_stack = []
+        self._invalidate_caches()
         self.generic_visit(node)
         return node
 
@@ -106,6 +129,7 @@ class ObfClassVariables(ast.NodeTransformer):
         self.class_name_stack.append(node.name)
         self.class_path_stack.append(self._qualified_name(self.module_name, *self.scope_name_stack, node.name))
         self.scope_name_stack.append(node.name)
+        self._invalidate_caches()
 
         new_body = []
         for stmt in node.body:
@@ -121,6 +145,7 @@ class ObfClassVariables(ast.NodeTransformer):
         self.class_path_stack.pop()
         self.class_name_stack.pop()
         self.scope_stack.pop()
+        self._invalidate_caches()
         return node
 
     def visit_FunctionDef(self, node):

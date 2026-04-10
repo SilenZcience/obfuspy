@@ -3,7 +3,7 @@ import ast
 from obfuspy.util.randomizer import Randomizer
 
 
-class ObfLocalVariables(ast.NodeTransformer):
+class ObfLocalVariables(ast.NodeTransformer): # TODO: verify
     """
     Obfuscates local variables in function scopes (including nested ones).
     """
@@ -13,6 +13,9 @@ class ObfLocalVariables(ast.NodeTransformer):
         self.file_module = file_module
         self.current_table_stack = []
         self.local_var_map_stack = []
+        # Caches for performance
+        self._cached_child_table = {}
+        self._cached_resolved_names = {}
 
     def _lookup_symbol(self, table, name: str):
         if table is None:
@@ -23,8 +26,14 @@ class ObfLocalVariables(ast.NodeTransformer):
             return None
 
     def _child_table_for(self, node):
+        # Use cache to avoid repeated lookups for the same node in the same parent table
         current_table = self.current_table_stack[-1] if self.current_table_stack else None
+        cache_key = (id(current_table), id(node))
+        cache = self._cached_child_table
+        if cache_key in cache:
+            return cache[cache_key]
         if current_table is None:
+            cache[cache_key] = None
             return None
 
         node_name = 'lambda' if isinstance(node, ast.Lambda) else getattr(node, 'name', None)
@@ -33,26 +42,30 @@ class ObfLocalVariables(ast.NodeTransformer):
         expected_type = 'class' if isinstance(node, ast.ClassDef) else 'function'
         typed_children = [child for child in current_table.get_children() if child.get_type() == expected_type]
 
-        # Prefer line-based matching so this still works if another layer renamed
-        # function/class names before this layer runs.
+        result = None
         if node_lineno is not None:
             line_matches = [child for child in typed_children if child.get_lineno() == node_lineno]
             if len(line_matches) == 1:
-                return line_matches[0]
-            if line_matches and node_name is not None:
+                result = line_matches[0]
+            elif line_matches and node_name is not None:
                 for child in line_matches:
                     if child.get_name() == node_name:
-                        return child
-                return line_matches[0]
+                        result = child
+                        break
+                if result is None:
+                    result = line_matches[0]
 
-        if node_name is not None:
+        if result is None and node_name is not None:
             for child in typed_children:
                 if child.get_name() == node_name:
-                    return child
+                    result = child
+                    break
 
-        if typed_children:
-            return typed_children[0]
-        return None
+        if result is None and typed_children:
+            result = typed_children[0]
+
+        cache[cache_key] = result
+        return result
 
     def _build_local_var_map(self, table) -> dict:
         if table is None or table.get_type() != 'function':
@@ -75,6 +88,11 @@ class ObfLocalVariables(ast.NodeTransformer):
         return bool(self.current_table_stack) and self.current_table_stack[-1].get_type() == 'function'
 
     def _resolve_renamed_name(self, name: str):
+        # Use cache to avoid repeated resolution in the same scope stack
+        cache_key = (tuple(id(t) for t in self.current_table_stack), name)
+        cache = self._cached_resolved_names
+        if cache_key in cache:
+            return cache[cache_key]
         # Resolve lexical names from inner to outer scope.
         for idx in range(len(self.current_table_stack) - 1, -1, -1):
             table = self.current_table_stack[idx]
@@ -83,24 +101,34 @@ class ObfLocalVariables(ast.NodeTransformer):
                 continue
 
             if symbol.is_global() or symbol.is_imported() or symbol.is_parameter():
+                cache[cache_key] = None
                 return None
 
             if symbol.is_local():
-                return self.local_var_map_stack[idx].get(name)
+                result = self.local_var_map_stack[idx].get(name)
+                cache[cache_key] = result
+                return result
 
             if symbol.is_free() or symbol.is_nonlocal():
                 continue
 
+            cache[cache_key] = None
             return None
 
+        cache[cache_key] = None
         return None
+    def _invalidate_caches(self):
+        self._cached_child_table.clear()
+        self._cached_resolved_names.clear()
 
     def visit_Module(self, node):
         self.current_table_stack = [self.file_module.symtable]
         self.local_var_map_stack = [{}]
+        self._invalidate_caches()
         self.generic_visit(node)
         self.local_var_map_stack.pop()
         self.current_table_stack.pop()
+        self._invalidate_caches()
         return node
 
     def visit_ClassDef(self, node):
@@ -108,12 +136,14 @@ class ObfLocalVariables(ast.NodeTransformer):
         if child_table is not None:
             self.current_table_stack.append(child_table)
             self.local_var_map_stack.append({})
+            self._invalidate_caches()
 
         self.generic_visit(node)
 
         if child_table is not None:
             self.local_var_map_stack.pop()
             self.current_table_stack.pop()
+            self._invalidate_caches()
         return node
 
     def _visit_callable(self, node):
@@ -123,12 +153,14 @@ class ObfLocalVariables(ast.NodeTransformer):
         if child_table is not None:
             self.current_table_stack.append(child_table)
             self.local_var_map_stack.append(local_map)
+            self._invalidate_caches()
 
         self.generic_visit(node)
 
         if child_table is not None:
             self.local_var_map_stack.pop()
             self.current_table_stack.pop()
+            self._invalidate_caches()
         return node
 
     def visit_FunctionDef(self, node):

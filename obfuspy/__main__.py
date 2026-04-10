@@ -94,6 +94,7 @@ def main():
 
     Obfuscator.obfuscate(settings)
     for file_module in file_modules:
+        print(f'Writing {file_module.out_path}...')
         with open(file_module.out_path, 'w', encoding='utf-8') as f:
             f.write(file_module.out_code)
 

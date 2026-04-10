@@ -2,10 +2,11 @@ import ast
 from obfuspy.util.randomizer import Randomizer
 
 
-class ObfImports(ast.NodeTransformer):
+class ObfImports(ast.NodeTransformer): # TODO: fix bug coloramainit, import name same as module variable (import -> modulevar okay, modulevar -> import breaks)
     """
     Obfuscates import-statements.
     """
+    global_import_map = {}  # Class variable: Maps module names to their global obfuscated aliases
 
     def __init__(self, randomizer: Randomizer, file_module) -> None:
         self.randomizer = randomizer
@@ -57,10 +58,27 @@ class ObfImports(ast.NodeTransformer):
                 return scope_map[original_name]
         return None
 
-    def _local_import_name(self, preferred_name: str) -> str:
+    def _local_import_name(self, preferred_name: str, module_key: str = None) -> str:
+        """
+        Generate or retrieve a local import alias name.
+
+        If module_key is provided and already exists in the global import map,
+        reuse that alias. Otherwise, generate a new unique name and store it
+        in the global map if module_key is provided.
+        """
+        # If we have a module key and it's already been aliased, reuse that alias
+        if module_key and module_key in ObfImports.global_import_map:
+            return ObfImports.global_import_map[module_key]
+
+        # Generate a new unique name
         generated_name = next(self.randomizer.random_name_gen)
         while generated_name == preferred_name:
             generated_name = next(self.randomizer.random_name_gen)
+
+        # Store in global map if module_key is provided
+        if module_key:
+            ObfImports.global_import_map[module_key] = generated_name
+
         return generated_name
 
     def _collect_import_bindings(self, node) -> None:
@@ -84,9 +102,11 @@ class ObfImports(ast.NodeTransformer):
                 original_bound_name = name.asname or name.name.split('.')[0]
                 if name.asname is None and '.' in name.name:
                     continue
-                local_name = self._local_import_name(name.name.split('.')[-1])
+                # Use the full module name as the key for consistent aliasing
+                module_key = self._qualified_name(self._resolve_import_module(node), name.name)
+                local_name = self._local_import_name(name.name.split('.')[-1], module_key=module_key)
                 self._register_import(scope_key, original_bound_name, local_name)
-                self.binding_map[local_name] = self._qualified_name(self._resolve_import_module(node), name.name)
+                self.binding_map[local_name] = module_key
             return
 
         if isinstance(node, ast.ImportFrom):
@@ -99,7 +119,8 @@ class ObfImports(ast.NodeTransformer):
                 qualified_name = f'{resolved_module}.{name.name}' if resolved_module else name.name
                 export_name = self._export_name(qualified_name)
                 imported_symbol_name = export_name if export_name is not None else name.name
-                local_name = self._local_import_name(imported_symbol_name)
+                # Use the qualified name as the key for consistent aliasing
+                local_name = self._local_import_name(imported_symbol_name, module_key=qualified_name)
                 self._register_import(scope_key, original_bound_name, local_name)
                 self.binding_map[local_name] = qualified_name
             return
@@ -114,6 +135,7 @@ class ObfImports(ast.NodeTransformer):
                 self._collect_import_bindings(child)
 
     def visit_Module(self, node):
+        ObfImports.global_import_map = {}
         self.import_map = {}
         self.binding_map = {}
         self.explicit_global_stack = []
@@ -159,9 +181,11 @@ class ObfImports(ast.NodeTransformer):
                 if name.asname is None and '.' in name.name:
                     self.binding_map[original_bound_name] = self._qualified_name(self._resolve_import_module(node), name.name)
                     continue
-                local_name = self._local_import_name(name.name.split('.')[-1])
+                # Use the full module name as the key for consistent aliasing
+                module_key = self._qualified_name(self._resolve_import_module(node), name.name)
+                local_name = self._local_import_name(name.name.split('.')[-1], module_key=module_key)
                 self._register_import(self._scope_key(), original_bound_name, local_name)
-                self.binding_map[local_name] = self._qualified_name(self._resolve_import_module(node), name.name)
+                self.binding_map[local_name] = module_key
 
             if name.asname is None and '.' in name.name:
                 continue
@@ -182,7 +206,8 @@ class ObfImports(ast.NodeTransformer):
 
             local_name = self._lookup_import(original_bound_name)
             if local_name is None:
-                local_name = self._local_import_name(imported_symbol_name)
+                # Use the qualified name as the key for consistent aliasing
+                local_name = self._local_import_name(imported_symbol_name, module_key=qualified_name)
                 self._register_import(self._scope_key(), original_bound_name, local_name)
                 self.binding_map[local_name] = qualified_name
 

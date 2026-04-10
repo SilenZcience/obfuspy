@@ -2,7 +2,7 @@ import ast
 from obfuspy.util.randomizer import Randomizer, BUILTINS_DEFAULT
 
 
-class ObfModuleVariables(ast.NodeTransformer):
+class ObfModuleVariables(ast.NodeTransformer): # TODO: verify
     """
     Obfuscates module-level variables.
     """
@@ -14,6 +14,9 @@ class ObfModuleVariables(ast.NodeTransformer):
         self.module_name = getattr(file_module, 'module_name', None)
         self.scope_stack = []
         self.current_table_stack = []
+        # Caches for performance
+        self._cached_module_var_map = None
+        self._cached_entry_for_name = {}
 
     def _module_var_exports(self) -> dict:
         return self.project_context.get('symbol_map', {})
@@ -37,8 +40,13 @@ class ObfModuleVariables(ast.NodeTransformer):
         return {}
 
     def _module_var_entry_for_name(self, name: str):
+        # Use cache to avoid repeated lookups
+        cache = self._cached_entry_for_name
+        if name in cache:
+            return cache[name]
         module_name = self.module_name
         if module_name is None:
+            cache[name] = None
             return None
 
         exports = self._module_var_exports()
@@ -51,7 +59,9 @@ class ObfModuleVariables(ast.NodeTransformer):
             current_name = self._entry_name(entry)
             original_name = qualified_name.rsplit('.', 1)[-1]
             if name == original_name or name == current_name:
-                return qualified_name, current_name
+                cache[name] = (qualified_name, current_name)
+                return cache[name]
+        cache[name] = None
         return None
 
     def _set_current_module_var_name(self, qualified_name: str, current_name: str) -> None:
@@ -59,13 +69,17 @@ class ObfModuleVariables(ast.NodeTransformer):
         exports[qualified_name] = {'name': current_name, 'kind': 'module_var'}
 
     def _current_module_var_map(self) -> dict:
+        # Cache the map for the lifetime of the instance (or until explicitly invalidated)
+        if self._cached_module_var_map is not None:
+            return self._cached_module_var_map
         module_name = self.module_name
         if module_name is None:
-            return {}
+            self._cached_module_var_map = {}
+            return self._cached_module_var_map
 
         exports = self._module_var_exports()
         prefix = f'{module_name}.'
-        return {
+        result = {
             qualified_name.rsplit('.', 1)[-1]: self._entry_name(entry)
             for qualified_name, entry in exports.items()
             if (
@@ -74,6 +88,11 @@ class ObfModuleVariables(ast.NodeTransformer):
                 and self._entry_kind(entry) in (None, 'module_var')
             )
         }
+        self._cached_module_var_map = result
+        return result
+    def _invalidate_caches(self):
+        self._cached_module_var_map = None
+        self._cached_entry_for_name.clear()
 
     def _alias_assign(self, original_name: str, obfuscated_name: str, source_node) -> ast.Assign:
         return ast.Assign(
@@ -160,6 +179,7 @@ class ObfModuleVariables(ast.NodeTransformer):
     def visit_Module(self, node):
         self.scope_stack = []
         self.current_table_stack = [self.file_module.symtable]
+        self._invalidate_caches()
         self.generic_visit(node)
         self.current_table_stack.pop()
         return node
