@@ -99,7 +99,7 @@ class ObfStringConstants(ast.NodeTransformer):
         ridx = random.randint(0, len(s))
         value = value[:ridx] + chr(key) + value[ridx:]
         return ast.parse(
-            f"(lambda s: str().join(chr(ord(c)^((ord(s[{ridx}])^(i*{rint}))&0xff)) for i,c in enumerate(s[:{ridx}]+s[{ridx+1}:])))({value!r})",
+            f"(lambda s: str().join(chr(ord(c)^((ord(s[{ridx}])^(i*{rint}))&0xff)) for i,c in enumerate(s[:{ridx}]+s[{ridx+1}:])))({value!r})", # TODO: use generated variable names!
             mode='eval'
         ).body
 
@@ -109,7 +109,7 @@ class ObfStringConstants(ast.NodeTransformer):
         decompressed = unicode_decompress(compressed)
         if decompressed != s:
             raise ValueError
-        return ast.parse(f"str().join(chr(((h<<6&64|c&63)+22)%133+10) for h,c in zip(*(iter({compressed!r}),)*2))", mode='eval').body
+        return ast.parse(f"str().join(chr(((h<<6&64|c&63)+22)%133+10) for h,c in zip(*(iter({compressed!r}),)*2))", mode='eval').body  # TODO: use generated variable names!
 
     @staticmethod
     def obf_string_node(node):

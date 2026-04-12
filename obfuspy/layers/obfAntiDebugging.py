@@ -46,7 +46,7 @@ for {0} in __import__('sys').modules:
             break
 """,
 ] # beware that iterative variables make problems inside class bodies
-ANTI_DEBUG_LAMBDA = [
+ANTI_DEBUG_LAMBDA = [ # TODO: use generated variable names!
     """__import__('sys').gettrace() is not None and (globals()['__builtins__'].clear() if isinstance(globals()['__builtins__'],dict) else globals()['__builtins__'].__dict__.clear())""",
     """any(frame.filename.lower().find(keyword)!=-1 for frame in __import__('inspect').stack() for keyword in {'pdb','bdb','ipdb','pudb','rpdb','wdb','pydevd','debugpy','ptvsd'}) and (globals()['__builtins__'].clear() if isinstance(globals()['__builtins__'],dict) else globals()['__builtins__'].__dict__.clear())""",
     """any(name.lower().find(dbg)!=-1 for name in __import__('sys').modules for dbg in {'pdb','bdb','ipdb','pudb','rpdb','wdb','pydevd','debugpy','ptvsd'}) and (globals()['__builtins__'].clear() if isinstance(globals()['__builtins__'],dict) else globals()['__builtins__'].__dict__.clear())""",

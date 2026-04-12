@@ -1,7 +1,6 @@
 import ast
 from obfuspy.util.randomizer import Randomizer, BUILTINS_DEFAULT
 
-
 class ObfModuleVariables(ast.NodeTransformer): # TODO: verify
     """
     Obfuscates module-level variables.
@@ -17,6 +16,8 @@ class ObfModuleVariables(ast.NodeTransformer): # TODO: verify
         # Caches for performance
         self._cached_module_var_map = None
         self._cached_entry_for_name = {}
+        # Blocklist of import names that should not be obfuscated
+        self._import_names_blocklist = set()
 
     def _module_var_exports(self) -> dict:
         return self.project_context.get('symbol_map', {})
@@ -94,6 +95,42 @@ class ObfModuleVariables(ast.NodeTransformer): # TODO: verify
         self._cached_module_var_map = None
         self._cached_entry_for_name.clear()
 
+    def _collect_import_names(self, node) -> set:
+        """
+        Pre-scan the AST to collect all names bound by import statements.
+        This prevents obfuscation of variables that share names with imports or import aliases.
+
+        Returns a set of all names that are imported or aliased in import statements.
+        """
+        import_names = set()
+
+        class ImportCollector(ast.NodeVisitor):
+            def visit_Import(self, node):
+                for name in node.names:
+                    # Add the alias if it exists, otherwise add the first part of the module name
+                    if name.asname:
+                        import_names.add(name.asname)
+                    else:
+                        # For 'import x.y.z', only 'x' is bound in the local namespace
+                        import_names.add(name.name.split('.')[0])
+                self.generic_visit(node)
+
+            def visit_ImportFrom(self, node):
+                for name in node.names:
+                    if name.name == '*':
+                        # Can't determine what names are imported with *, skip
+                        continue
+                    # Add the alias if it exists, otherwise add the imported name
+                    if name.asname:
+                        import_names.add(name.asname)
+                    else:
+                        import_names.add(name.name)
+                self.generic_visit(node)
+
+        collector = ImportCollector()
+        collector.visit(node)
+        return import_names
+
     def _alias_assign(self, original_name: str, obfuscated_name: str, source_node) -> ast.Assign:
         return ast.Assign(
             targets=[ast.Name(id=original_name, ctx=ast.Store())],
@@ -108,6 +145,9 @@ class ObfModuleVariables(ast.NodeTransformer): # TODO: verify
 
         if isinstance(target, ast.Name):
             original_name = target.id
+            # Skip obfuscation if the name is in the import blocklist
+            if original_name in self._import_names_blocklist:
+                return target, aliases
             obfuscated_name = module_var_map.get(original_name)
             if obfuscated_name is not None and original_name not in BUILTINS_DEFAULT:
                 entry = self._module_var_entry_for_name(original_name)
@@ -180,6 +220,8 @@ class ObfModuleVariables(ast.NodeTransformer): # TODO: verify
         self.scope_stack = []
         self.current_table_stack = [self.file_module.symtable]
         self._invalidate_caches()
+        # Collect import names to avoid obfuscating variables with conflicting names
+        self._import_names_blocklist = self._collect_import_names(node)
         self.generic_visit(node)
         self.current_table_stack.pop()
         return node
@@ -312,6 +354,9 @@ class ObfModuleVariables(ast.NodeTransformer): # TODO: verify
 
         if isinstance(target, ast.Name):
             original_name = target.id
+            # Skip obfuscation if the name is in the import blocklist
+            if original_name in self._import_names_blocklist:
+                return target, aliases
             obfuscated_name = module_var_map.get(original_name)
             if obfuscated_name is not None and self._is_global_binding(original_name):
                 entry = self._module_var_entry_for_name(original_name)
@@ -350,6 +395,10 @@ class ObfModuleVariables(ast.NodeTransformer): # TODO: verify
             return node
 
         if node.id in BUILTINS_DEFAULT:
+            return node
+
+        # Skip obfuscation if the name is in the import blocklist
+        if node.id in self._import_names_blocklist:
             return node
 
         if isinstance(node.ctx, ast.Load) and (self._is_module_scope() or not self._is_shadowed(node.id)):

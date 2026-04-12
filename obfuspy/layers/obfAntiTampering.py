@@ -105,7 +105,7 @@ class ObfAntiTampering(ast.NodeTransformer):
     #                 node_hash.update(ast.dump(current_node).encode())
     #     return node_hash
 
-    def anti_tampering_code(self, node_type = None) -> ast.stmt:
+    def anti_tampering_code(self, node_type = None) -> ast.stmt:  # TODO: use generated variable names!
         ObfAntiTampering.HASH_ID += 1
         tmp_var = next(self.randomizer.random_name_gen)
         anti_tampering_stmt = ast.parse(f"""{tmp_var} = ';;REPLACEMEHASH'
