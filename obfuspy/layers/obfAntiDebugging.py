@@ -46,10 +46,10 @@ for {0} in __import__('sys').modules:
             break
 """,
 ] # beware that iterative variables make problems inside class bodies
-ANTI_DEBUG_LAMBDA = [ # TODO: use generated variable names!
+ANTI_DEBUG_LAMBDA = [
     """__import__('sys').gettrace() is not None and (globals()['__builtins__'].clear() if isinstance(globals()['__builtins__'],dict) else globals()['__builtins__'].__dict__.clear())""",
-    """any(frame.filename.lower().find(keyword)!=-1 for frame in __import__('inspect').stack() for keyword in {'pdb','bdb','ipdb','pudb','rpdb','wdb','pydevd','debugpy','ptvsd'}) and (globals()['__builtins__'].clear() if isinstance(globals()['__builtins__'],dict) else globals()['__builtins__'].__dict__.clear())""",
-    """any(name.lower().find(dbg)!=-1 for name in __import__('sys').modules for dbg in {'pdb','bdb','ipdb','pudb','rpdb','wdb','pydevd','debugpy','ptvsd'}) and (globals()['__builtins__'].clear() if isinstance(globals()['__builtins__'],dict) else globals()['__builtins__'].__dict__.clear())""",
+    """any({0}.filename.lower().find({1})!=-1 for {0} in __import__('inspect').stack() for {1} in {'pdb','bdb','ipdb','pudb','rpdb','wdb','pydevd','debugpy','ptvsd'}) and (globals()['__builtins__'].clear() if isinstance(globals()['__builtins__'],dict) else globals()['__builtins__'].__dict__.clear())""",
+    """any({0}.lower().find({1})!=-1 for {0} in __import__('sys').modules for {1} in {'pdb','bdb','ipdb','pudb','rpdb','wdb','pydevd','debugpy','ptvsd'}) and (globals()['__builtins__'].clear() if isinstance(globals()['__builtins__'],dict) else globals()['__builtins__'].__dict__.clear())""",
 ]
 
 
@@ -84,7 +84,10 @@ class ObfAntiDebugging(ast.NodeTransformer):
             anti_debug_stmt = ''.join(c + ''.join(random.choice(string.ascii_letters) for _ in range(offset-1)) for c in anti_debug_stmt)
             return ast.parse(f"{self.exec_alias_name}({anti_debug_stmt!r}[::{offset}])").body
 
-        anti_debug_stmt = random.choice(ANTI_DEBUG_LAMBDA)
+        anti_debug_stmt = random.choice(ANTI_DEBUG_LAMBDA).format(
+            next(self.randomizer.random_name_gen),
+            next(self.randomizer.random_name_gen),
+        )
         return ast.parse(
             f"(lambda: {anti_debug_stmt})()"
         ).body

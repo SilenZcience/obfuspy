@@ -89,7 +89,7 @@ class ObfStringConstants(ast.NodeTransformer):
         )
 
     @staticmethod
-    def generate_obfuscated_ast_node(s: str):
+    def generate_obfuscated_ast_node(s: str, randomizer):
         key = sum(map(ord, s)) & 0xff
         rint = random.randint(10,100)
         value = ''.join(
@@ -98,31 +98,39 @@ class ObfStringConstants(ast.NodeTransformer):
         )
         ridx = random.randint(0, len(s))
         value = value[:ridx] + chr(key) + value[ridx:]
+        tmp_value0 = next(randomizer.random_name_gen)
+        tmp_value1 = next(randomizer.random_name_gen)
+        tmp_value2 = next(randomizer.random_name_gen)
         return ast.parse(
-            f"(lambda s: str().join(chr(ord(c)^((ord(s[{ridx}])^(i*{rint}))&0xff)) for i,c in enumerate(s[:{ridx}]+s[{ridx+1}:])))({value!r})", # TODO: use generated variable names!
+            f"(lambda {tmp_value0}: str().join(chr(ord({tmp_value2})^((ord({tmp_value0}[{ridx}])^({tmp_value1}*{rint}))&0xff)) for {tmp_value1},{tmp_value2} in enumerate({tmp_value0}[:{ridx}]+{tmp_value0}[{ridx+1}:])))({value!r})",
             mode='eval'
         ).body
 
     @staticmethod
-    def generate_compressed_logic(s: str):
+    def generate_compressed_logic(s: str, randomizer):
         compressed = unicode_compress(s.encode('utf-8'))
         decompressed = unicode_decompress(compressed)
         if decompressed != s:
             raise ValueError
-        return ast.parse(f"str().join(chr(((h<<6&64|c&63)+22)%133+10) for h,c in zip(*(iter({compressed!r}),)*2))", mode='eval').body  # TODO: use generated variable names!
+        tmp_value0 = next(randomizer.random_name_gen)
+        tmp_value1 = next(randomizer.random_name_gen)
+        return ast.parse(
+            f"str().join(chr((({tmp_value0}<<6&64|{tmp_value1}&63)+22)%133+10) for {tmp_value0},{tmp_value1} in zip(*(iter({compressed!r}),)*2))",
+            mode='eval'
+        ).body
 
     @staticmethod
-    def obf_string_node(node):
+    def obf_string_node(node, randomizer):
         if random.random() < 0.7:
-            return ObfStringConstants.generate_obfuscated_ast_node(node.value)
+            return ObfStringConstants.generate_obfuscated_ast_node(node.value, randomizer)
         try:
-            return ObfStringConstants.generate_compressed_logic(node.value)
+            return ObfStringConstants.generate_compressed_logic(node.value, randomizer)
         except ValueError:
-            return ObfStringConstants.generate_obfuscated_ast_node(node.value)
+            return ObfStringConstants.generate_obfuscated_ast_node(node.value, randomizer)
 
     def visit_Constant(self, node):
         if isinstance(node.value, str):
             if node.value == ';;REPLACEMEHASH':
                 return node
-            return self.obf_string_node(node)
+            return self.obf_string_node(node, self.randomizer)
         return node

@@ -2,7 +2,7 @@ import ast
 from obfuspy.util.randomizer import Randomizer
 
 
-class ObfImports(ast.NodeTransformer): # TODO: fix bug coloramainit, import name same as module variable (import -> modulevar okay, modulevar -> import breaks)
+class ObfImports(ast.NodeTransformer):
     """
     Obfuscates import-statements.
     """

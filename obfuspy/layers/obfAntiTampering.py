@@ -105,11 +105,13 @@ class ObfAntiTampering(ast.NodeTransformer):
     #                 node_hash.update(ast.dump(current_node).encode())
     #     return node_hash
 
-    def anti_tampering_code(self, node_type = None) -> ast.stmt:  # TODO: use generated variable names!
+    def anti_tampering_code(self, node_type = None) -> ast.stmt:
         ObfAntiTampering.HASH_ID += 1
         tmp_var = next(self.randomizer.random_name_gen)
+        tmp_var0 = next(self.randomizer.random_name_gen)
+        tmp_var1 = next(self.randomizer.random_name_gen)
         anti_tampering_stmt = ast.parse(f"""{tmp_var} = ';;REPLACEMEHASH'
-if sum(i * ord(c) for i, c in enumerate(''.join(__import__('builtins').open(__file__, 'r', encoding='utf-8').read().splitlines()[int({tmp_var}.split(';')[0]) : int({tmp_var}.split(';')[1])]), start=1)) % (2**64) != int({tmp_var}.split(';')[2]):
+if sum({tmp_var0} * ord({tmp_var1}) for {tmp_var0},{tmp_var1} in enumerate(''.join(__import__('builtins').open(__file__, 'r', encoding='utf-8').read().splitlines()[int({tmp_var}.split(';')[0]) : int({tmp_var}.split(';')[1])]), start=1)) % (2**64) != int({tmp_var}.split(';')[2]):
     (globals()['__builtins__'].clear() if isinstance(globals()['__builtins__'], dict) else globals()['__builtins__'].__dict__.clear())
 """).body
         for node in anti_tampering_stmt:

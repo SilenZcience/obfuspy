@@ -10,6 +10,7 @@ class ObfDefArguments(ast.NodeTransformer):
         self.module_name = getattr(file_module, 'module_name', None)
         self.arg_stack = [{}]
         self.class_stack = []
+        self.function_stack = []
 
     def _arg_map_for_qualified(self, qualified_name):
         symbol_map = self.project_context.get('symbol_map', {})
@@ -30,6 +31,8 @@ class ObfDefArguments(ast.NodeTransformer):
         parts = [self.module_name] if self.module_name else []
         if self.class_stack:
             parts.extend(self.class_stack)
+        if self.function_stack:
+            parts.extend(self.function_stack)
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             parts.append(node.name)
         return '.'.join(part for part in parts if part)
@@ -52,13 +55,20 @@ class ObfDefArguments(ast.NodeTransformer):
         if getattr(node.args, 'kwarg', None) and node.args.kwarg.arg in arg_map:
             node.args.kwarg.arg = arg_map[node.args.kwarg.arg]
         self.arg_stack.append(arg_map)
+        # Push function name for nested functions before visiting children
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            self.function_stack.append(node.name)
         self.generic_visit(node)
+        # Pop function name
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            self.function_stack.pop()
         self.arg_stack.pop()
         return node
 
     def visit_Module(self, node):
         self.arg_stack = [{}]
         self.class_stack = []
+        self.function_stack = []
         self.generic_visit(node)
         return node
 
