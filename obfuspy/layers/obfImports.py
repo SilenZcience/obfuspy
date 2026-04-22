@@ -283,3 +283,12 @@ class ObfImports(ast.NodeTransformer):
             return ast.Name(id=mapped_name, ctx=node.ctx)
 
         return node
+
+    def visit_Delete(self, node):
+        for idx, target in enumerate(node.targets):
+            if isinstance(target, ast.Name):
+                mapped_name = self._lookup_import(target.id)
+                if mapped_name is not None:
+                    node.targets[idx] = ast.Name(id=mapped_name, ctx=ast.Del())
+        self.generic_visit(node)
+        return node
