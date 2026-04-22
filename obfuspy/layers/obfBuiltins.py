@@ -8,7 +8,13 @@ class ObfBuiltins(ast.NodeTransformer):
     """
     def __init__(self, randomizer: Randomizer, _) -> None:
         self.randomizer = randomizer
-        self.builtin_map = {b: next(self.randomizer.random_name_gen) for b in ALL_BUILTINS}
+        self.project_context = getattr(randomizer, 'project_context', {})
+        defined_names = set(self.project_context.get('defined_names', set()))
+        self.builtin_map = {
+            b: next(self.randomizer.random_name_gen)
+            for b in ALL_BUILTINS
+            if b not in defined_names
+        }
 
     def builtin_code(self):
         value = ','.join(map(str, self.builtin_map.values()))
@@ -23,6 +29,9 @@ class ObfBuiltins(ast.NodeTransformer):
         )
 
     def visit_Module(self, node):
+        if not self.builtin_map:
+            return self.generic_visit(node)
+
         doc_string = None
         if (node.body and isinstance(node.body[0], ast.Expr) and
             isinstance(node.body[0].value, ast.Constant) and

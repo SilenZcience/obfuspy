@@ -131,6 +131,123 @@ class Obfuscator:
         return used
 
     @staticmethod
+    def _collect_defined_names(file_modules) -> set:
+        defined = set()
+
+        class DefinedNameCollector(ast.NodeVisitor):
+            @staticmethod
+            def _add_arg_names(args_node) -> None:
+                for arg in getattr(args_node, 'posonlyargs', []):
+                    defined.add(arg.arg)
+                for arg in getattr(args_node, 'args', []):
+                    defined.add(arg.arg)
+                for arg in getattr(args_node, 'kwonlyargs', []):
+                    defined.add(arg.arg)
+                vararg = getattr(args_node, 'vararg', None)
+                if vararg is not None:
+                    defined.add(vararg.arg)
+                kwarg = getattr(args_node, 'kwarg', None)
+                if kwarg is not None:
+                    defined.add(kwarg.arg)
+
+            @staticmethod
+            def _add_target_names(target) -> None:
+                if isinstance(target, ast.Name):
+                    defined.add(target.id)
+                    return
+                if isinstance(target, (ast.Tuple, ast.List)):
+                    for element in target.elts:
+                        DefinedNameCollector._add_target_names(element)
+                    return
+                if isinstance(target, ast.Starred):
+                    DefinedNameCollector._add_target_names(target.value)
+
+            def visit_FunctionDef(self, node):
+                defined.add(node.name)
+                self._add_arg_names(node.args)
+                self.generic_visit(node)
+
+            def visit_AsyncFunctionDef(self, node):
+                defined.add(node.name)
+                self._add_arg_names(node.args)
+                self.generic_visit(node)
+
+            def visit_Lambda(self, node):
+                self._add_arg_names(node.args)
+                self.generic_visit(node)
+
+            def visit_ClassDef(self, node):
+                defined.add(node.name)
+                self.generic_visit(node)
+
+            def visit_Assign(self, node):
+                for target in node.targets:
+                    self._add_target_names(target)
+                self.generic_visit(node)
+
+            def visit_AnnAssign(self, node):
+                self._add_target_names(node.target)
+                self.generic_visit(node)
+
+            def visit_AugAssign(self, node):
+                self._add_target_names(node.target)
+                self.generic_visit(node)
+
+            def visit_For(self, node):
+                self._add_target_names(node.target)
+                self.generic_visit(node)
+
+            def visit_AsyncFor(self, node):
+                self._add_target_names(node.target)
+                self.generic_visit(node)
+
+            def visit_With(self, node):
+                for item in node.items:
+                    if item.optional_vars is not None:
+                        self._add_target_names(item.optional_vars)
+                self.generic_visit(node)
+
+            def visit_AsyncWith(self, node):
+                for item in node.items:
+                    if item.optional_vars is not None:
+                        self._add_target_names(item.optional_vars)
+                self.generic_visit(node)
+
+            def visit_ExceptHandler(self, node):
+                if isinstance(node.name, str):
+                    defined.add(node.name)
+                self.generic_visit(node)
+
+            def visit_Import(self, node):
+                for name in node.names:
+                    defined.add(name.asname or name.name.split('.')[0])
+                self.generic_visit(node)
+
+            def visit_ImportFrom(self, node):
+                for name in node.names:
+                    if name.name == '*':
+                        continue
+                    defined.add(name.asname or name.name)
+                self.generic_visit(node)
+
+            def visit_comprehension(self, node):
+                self._add_target_names(node.target)
+                self.generic_visit(node)
+
+            def visit_NamedExpr(self, node):
+                self._add_target_names(node.target)
+                self.generic_visit(node)
+
+        collector = DefinedNameCollector()
+        for file_module in file_modules:
+            tree = getattr(file_module, 'tree', None)
+            if tree is None:
+                continue
+            collector.visit(tree)
+
+        return defined
+
+    @staticmethod
     def _collect_target_names(target) -> list:
         names = []
         if isinstance(target, ast.Name):
@@ -376,6 +493,7 @@ class Obfuscator:
             'module_names': {file_module.in_path: file_module.module_name for file_module in file_modules},
             'symbol_map': {},
             'keyword_args_in_calls': set(),
+            'defined_names': Obfuscator._collect_defined_names(file_modules),
             'enabled_layers': {},
         }
 
