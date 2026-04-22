@@ -48,8 +48,8 @@ for {0} in __import__('sys').modules:
 ] # beware that iterative variables make problems inside class bodies
 ANTI_DEBUG_LAMBDA = [
     """__import__('sys').gettrace() is not None and (globals()['__builtins__'].clear() if isinstance(globals()['__builtins__'],dict) else globals()['__builtins__'].__dict__.clear())""",
-    """any({0}.filename.lower().find({1})!=-1 for {0} in __import__('inspect').stack() for {1} in {'pdb','bdb','ipdb','pudb','rpdb','wdb','pydevd','debugpy','ptvsd'}) and (globals()['__builtins__'].clear() if isinstance(globals()['__builtins__'],dict) else globals()['__builtins__'].__dict__.clear())""",
-    """any({0}.lower().find({1})!=-1 for {0} in __import__('sys').modules for {1} in {'pdb','bdb','ipdb','pudb','rpdb','wdb','pydevd','debugpy','ptvsd'}) and (globals()['__builtins__'].clear() if isinstance(globals()['__builtins__'],dict) else globals()['__builtins__'].__dict__.clear())""",
+    """any({0}.filename.lower().find({1})!=-1 for {0} in __import__('inspect').stack() for {1} in {{'pdb','bdb','ipdb','pudb','rpdb','wdb','pydevd','debugpy','ptvsd'}}) and (globals()['__builtins__'].clear() if isinstance(globals()['__builtins__'],dict) else globals()['__builtins__'].__dict__.clear())""",
+    """any({0}.lower().find({1})!=-1 for {0} in __import__('sys').modules for {1} in {{'pdb','bdb','ipdb','pudb','rpdb','wdb','pydevd','debugpy','ptvsd'}}) and (globals()['__builtins__'].clear() if isinstance(globals()['__builtins__'],dict) else globals()['__builtins__'].__dict__.clear())""",
 ]
 
 
@@ -64,8 +64,8 @@ class ObfAntiDebugging(ast.NodeTransformer):
         while self.exec_alias_name == 'exec':
             self.exec_alias_name = next(self.randomizer.random_name_gen)
 
-    def anti_debug_code(self) -> ast.stmt:
-        if random.random() < 1.5:
+    def anti_debug_code(self, is_class_def: bool = False) -> ast.stmt:
+        if random.random() < 0.5 and not is_class_def:
             return ast.parse(random.choice(ANTI_DEBUG_EXEC).format(
                 next(self.randomizer.random_name_gen),
                 next(self.randomizer.random_name_gen),
@@ -73,7 +73,7 @@ class ObfAntiDebugging(ast.NodeTransformer):
                 next(self.randomizer.random_name_gen),
             )).body
 
-        if random.random() < 0.5:
+        if random.random() < 0.5 and not is_class_def:
             offset = random.randint(2, 6)
             anti_debug_stmt = random.choice(ANTI_DEBUG_EXEC).format(
                 next(self.randomizer.random_name_gen),
@@ -127,19 +127,19 @@ class ObfAntiDebugging(ast.NodeTransformer):
             return 1
         return 0
 
-    def insert_anti_debug_code(self, body: list, include_anchor: bool = False, min_insert_index: int = 0) -> None:
+    def insert_anti_debug_code(self, body: list, include_anchor: bool = False, min_insert_index: int = 0, is_class_def: bool = False) -> None:
         if not body:
             return
         insert_start = max(self._insert_start_for_docstring(body), min_insert_index)
 
         if include_anchor:
-            body[insert_start:insert_start] = self.anti_debug_code()
+            body[insert_start:insert_start] = self.anti_debug_code(is_class_def)
             insert_start += 1
 
         positions = range(insert_start, len(body) + 1)
         insert_count = int(len(positions) * self.probability)
         for i in sorted(random.sample(positions, insert_count), reverse=True):
-            body[i:i] = self.anti_debug_code()
+            body[i:i] = self.anti_debug_code(is_class_def)
 
     def visit_Module(self, node):
         alias_index = self._module_insert_position(node.body)
@@ -149,7 +149,7 @@ class ObfAntiDebugging(ast.NodeTransformer):
         return node
 
     def visit_ClassDef(self, node):
-        self.insert_anti_debug_code(node.body)
+        self.insert_anti_debug_code(node.body, is_class_def = True)
         self.generic_visit(node)
         return node
 
