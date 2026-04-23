@@ -81,11 +81,20 @@ class ObfStringConstants(ast.NodeTransformer):
         )
 
     def visit_FormattedValue(self, node):
-        self.generic_visit(node)
-        return ast.Call(
-            func=ast.Name(id='str', ctx=ast.Load()),
-            args=[node.value],
-            keywords=[]
+        if node.format_spec is None:
+            return ast.Call(
+                func=ast.Name(id='str', ctx=ast.Load()),
+                args=[self.visit(node.value)],
+                keywords=[]
+            )
+        return ast.JoinedStr(
+            values=[
+                ast.FormattedValue(
+                    value=self.visit(node.value),
+                    conversion=node.conversion,
+                    format_spec=node.format_spec
+                )
+            ]
         )
 
     @staticmethod
