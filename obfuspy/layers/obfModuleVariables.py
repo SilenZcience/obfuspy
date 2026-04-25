@@ -389,6 +389,16 @@ class ObfModuleVariables(ast.NodeTransformer): # TODO: verify
         node.names = list(dict.fromkeys(expanded_names))
         return node
 
+    def visit_ExceptHandler(self, node: ast.ExceptHandler):
+        module_var_map = self._current_module_var_map()
+        if node.name and isinstance(node.name, str):
+            if node.name in module_var_map:
+                if not node.name in BUILTINS_DEFAULT and not node.name in self._import_names_blocklist:
+                    if self._is_module_scope() or not self._is_shadowed(node.name):
+                        node.name = module_var_map[node.name]
+
+        return self.generic_visit(node)
+
     def visit_Name(self, node):
         module_var_map = self._current_module_var_map()
         if node.id not in module_var_map:

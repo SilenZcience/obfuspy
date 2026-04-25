@@ -183,6 +183,14 @@ class ObfLocalVariables(ast.NodeTransformer): # TODO: verify
         node.names = new_names
         return node
 
+    def visit_ExceptHandler(self, node):
+        if node.name and isinstance(node.name, str):
+            mapped = self._resolve_renamed_name(node.name)
+            if mapped is not None:
+                node.name = mapped
+
+        return self.generic_visit(node)
+
     def visit_Name(self, node):
         if not self._in_function_scope():
             return node
