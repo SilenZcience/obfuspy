@@ -226,7 +226,7 @@ if sum({tmp_var0} * ord({tmp_var1}) for {tmp_var0},{tmp_var1} in enumerate(''.jo
         for i in indexes:
             slices.append((prev, i))
             prev = i + 1
-        slices.append((prev, len(o_code)))
+        slices.append((prev, len(o_code)+random.randint(1, 200)))
 
         hash_nodes = ObfAntiTampering.HASH_NODES.get(file_module, {})
         for node in hash_nodes.keys():

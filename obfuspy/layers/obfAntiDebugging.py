@@ -3,6 +3,50 @@ import random
 import string
 
 
+
+
+# IDEAS:
+# import sys, random
+
+# def tracer(frame, event, arg):
+#     if random.random() < 0.01:
+#         raise RuntimeError("cosmic ray")
+#     return tracer
+
+# sys.settrace(tracer)
+# or
+# __import__('sys').settrace(lambda *_: __import__('os')._exit(0) if __import__('random').random() < 0.01 else None)
+
+
+
+# sys.setrecursionlimit(1+len(__import__('inspect').stack()))
+
+
+
+#os._exit(666)
+
+
+
+# import threading
+
+# lock = threading.Lock()
+# lock.acquire()
+# lock.acquire()  # deadlock
+
+
+
+
+
+# replace some functions with lambda *_, **__: ctypes.string_at(0) # segfault
+
+
+
+
+# shuffle builints instead of clean()
+
+
+
+# TODO: 'pdb' or/and 'bdb' breaks "pytest" for example
 ANTI_DEBUG_EXEC = [ # TODO: more variety
 #     """import sys
 # if sys.gettrace() is not None: sys.exit(0)
@@ -65,7 +109,7 @@ class ObfAntiDebugging(ast.NodeTransformer):
             self.exec_alias_name = next(self.randomizer.random_name_gen)
 
     def anti_debug_code(self, is_class_def: bool = False) -> ast.stmt:
-        if random.random() < 0.5 and not is_class_def:
+        if random.random() < 0.5 and not is_class_def: # TODO: maybe delete this branch
             return ast.parse(random.choice(ANTI_DEBUG_EXEC).format(
                 next(self.randomizer.random_name_gen),
                 next(self.randomizer.random_name_gen),
