@@ -58,7 +58,12 @@ class ObfDefArguments(ast.NodeTransformer):
         # Push function name for nested functions before visiting children
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             self.function_stack.append(node.name)
-        self.generic_visit(node)
+
+        if isinstance(node, ast.Lambda):
+            self.visit(node.body)
+        else:
+            for stmt in node.body:
+                self.visit(stmt)
         # Pop function name
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             self.function_stack.pop()

@@ -43,7 +43,7 @@ OBFUSCATION_LAYERS = {
 }
 
 
-def acc_py_files(arg_paths) -> set:
+def acc_py_files(arg_paths) -> set: # TODO: non python files should be copied to output folder without modification, maybe add option to ignore non python files
     file_modules = set()
     for path in arg_paths:
         if os.path.isfile(path):
@@ -85,7 +85,7 @@ def main():
             return
     else:
          # TODO: if no files? maybe GUI fileselectdialog
-        settings: dict = gui.run()
+        settings: dict = gui.run() # TODO: autosave latest config
         if settings is None:
             return
 

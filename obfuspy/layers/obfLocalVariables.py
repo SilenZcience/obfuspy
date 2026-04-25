@@ -147,6 +147,15 @@ class ObfLocalVariables(ast.NodeTransformer): # TODO: verify
         return node
 
     def _visit_callable(self, node):
+        if isinstance(node, ast.Lambda):
+            self.visit(node.args)
+        else:
+            for deco in node.decorator_list:
+                self.visit(deco)
+            self.visit(node.args)
+            if node.returns:
+                self.visit(node.returns)
+
         child_table = self._child_table_for(node)
         local_map = self._build_local_var_map(child_table)
 
@@ -155,7 +164,11 @@ class ObfLocalVariables(ast.NodeTransformer): # TODO: verify
             self.local_var_map_stack.append(local_map)
             self._invalidate_caches()
 
-        self.generic_visit(node)
+        if isinstance(node, ast.Lambda):
+            self.visit(node.body)
+        else:
+            for stmt in node.body:
+                self.visit(stmt)
 
         if child_table is not None:
             self.local_var_map_stack.pop()

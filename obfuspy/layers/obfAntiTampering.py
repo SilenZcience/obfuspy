@@ -67,7 +67,7 @@ AST_NODE_TYPES = {
 #             h.hexdigest()
 #         )[1]
 #     )(ast.parse(builtins.open(__file__,'r',encoding='utf-8').read()), hashlib.sha256()) == 'REPLACEMEHASH' or (globals()['__builtins__'].clear() if isinstance(globals()['__builtins__'], dict) else globals()['__builtins__'].__dict__.clear())
-# )(__import__('ast'),__import__('hashlib'),__import__('builtins'))""" # TODO: variables need to be unique (next())
+# )(__import__('ast'),__import__('hashlib'),__import__('builtins'))"""
 # ANTI_TEMPERING_LAMBDA_NODES = set()
 # for node in ast.walk(ast.parse(ANTI_TEMPERING_LAMBDA)):
 #     ANTI_TEMPERING_LAMBDA_NODES.add(type(node))

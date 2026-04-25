@@ -227,22 +227,52 @@ class ObfModuleVariables(ast.NodeTransformer): # TODO: verify
         return node
 
     def visit_FunctionDef(self, node):
+        if isinstance(node, ast.Lambda):
+            self.visit(node.args)
+        else:
+            for deco in node.decorator_list:
+                self.visit(deco)
+            self.visit(node.args)
+            if node.returns:
+                self.visit(node.returns)
+
         child_table = self._child_table_for(node, 'function')
         if child_table is not None:
             self.current_table_stack.append(child_table)
         self.scope_stack.append('function')
-        self.generic_visit(node)
+
+        if isinstance(node, ast.Lambda):
+            self.visit(node.body)
+        else:
+            for stmt in node.body:
+                self.visit(stmt)
+
         self.scope_stack.pop()
         if child_table is not None:
             self.current_table_stack.pop()
         return node
 
     def visit_AsyncFunctionDef(self, node):
+        if isinstance(node, ast.Lambda):
+            self.visit(node.args)
+        else:
+            for deco in node.decorator_list:
+                self.visit(deco)
+            self.visit(node.args)
+            if node.returns:
+                self.visit(node.returns)
+
         child_table = self._child_table_for(node, 'function')
         if child_table is not None:
             self.current_table_stack.append(child_table)
         self.scope_stack.append('function')
-        self.generic_visit(node)
+
+        if isinstance(node, ast.Lambda):
+            self.visit(node.body)
+        else:
+            for stmt in node.body:
+                self.visit(stmt)
+
         self.scope_stack.pop()
         if child_table is not None:
             self.current_table_stack.pop()
