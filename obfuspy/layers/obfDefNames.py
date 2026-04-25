@@ -65,7 +65,13 @@ class ObfDefnames(ast.NodeTransformer): # TODO: verify
                     alias_assign_map[len(new_body)] = self._alias_assign(original_name, export_name, child)
             new_body.append(child)
         for idx, alias_assign in reversed(alias_assign_map.items()):
-            new_body.insert(random.randint(idx+1, len(new_body)), alias_assign)
+            first_non_def = idx+1
+            for idy in range(idx+2, len(new_body)):
+                if not isinstance(new_body[idy], (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    first_non_def = idy
+                    break
+
+            new_body.insert(random.randint(idx+1, first_non_def), alias_assign)
         node.body = new_body
 
         # Store method_map for this class name for global attribute obfuscation
