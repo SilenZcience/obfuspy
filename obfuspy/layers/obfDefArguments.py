@@ -1,5 +1,6 @@
 import ast
 
+
 class ObfDefArguments(ast.NodeTransformer):
     """
     Obfuscates function/method arguments using the export map.
