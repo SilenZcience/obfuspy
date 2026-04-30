@@ -1,108 +1,35 @@
 import ast
-from obfuspy.util.randomizer import Randomizer
+
+from obfuspy.util.domain import SYMBOL_MAP, Node
 
 
-class ObfClassVariables(ast.NodeTransformer): # TODO: verify
+class ObfClassVariables(ast.NodeTransformer):
     """
     Obfuscates class variables.
     """
+    FIRST_PASS = True
 
-    def __init__(self, randomizer: Randomizer, file_module) -> None:
-        self.randomizer = randomizer
-        self.file_module = file_module
-        self.project_context = getattr(randomizer, 'project_context', {})
+    def __init__(self, _, file_module) -> None:
         self.module_name = getattr(file_module, 'module_name', None)
-        self.scope_stack = []
-        self.scope_name_stack = []
-        self.class_name_stack = []
-        self.class_path_stack = []
-        # Caches for performance
-        self._cached_class_var_map = None
-        self._cached_entry_for_name = {}
+        self.prefix_parts = []
+        self._classvar_name_map_stack = []  # Stack of dicts: {original_name: obf_value}
+        self._classvar_name_map_cache = {}
 
-    def _qualified_name(self, *parts) -> str:
-        return '.'.join(part for part in parts if part)
+    def _push_classvar_scope(self):
+        key = tuple((lbl.ltype, lbl.name) for lbl in self.prefix_parts)
+        if key in self._classvar_name_map_cache:
+            classvar_map = self._classvar_name_map_cache[key]
+        else:
+            classvar_map = SYMBOL_MAP.get_classvars(self.prefix_parts)
+            self._classvar_name_map_cache[key] = classvar_map
+        self._classvar_name_map_stack.append(classvar_map)
 
-    def _class_var_exports(self) -> dict:
-        return self.project_context.get('symbol_map', {})
+    def _pop_classvar_scope(self):
+        if self._classvar_name_map_stack:
+            self._classvar_name_map_stack.pop()
 
-    @staticmethod
-    def _entry_name(entry):
-        if isinstance(entry, dict):
-            return entry.get('name')
-        return entry
-
-    @staticmethod
-    def _entry_kind(entry):
-        if isinstance(entry, dict):
-            return entry.get('kind')
-        return None
-
-    def _current_class_vars_dict(self) -> dict:
-        symbol_map = self.project_context.setdefault('symbol_map', {})
-        if isinstance(symbol_map, dict):
-            return symbol_map
-        return {}
-
-    def _class_var_entry_for_name(self, name: str):
-        # Use cache to avoid repeated lookups
-        cache = self._cached_entry_for_name
-        class_path = self._current_class_path()
-        cache_key = (class_path, name)
-        if cache_key in cache:
-            return cache[cache_key]
-        if class_path is None:
-            cache[cache_key] = None
-            return None
-
-        exports = self._class_var_exports()
-        prefix = f'{class_path}.'
-        for qualified_name, entry in exports.items():
-            if self._entry_kind(entry) not in (None, 'class_var'):
-                continue
-            if not qualified_name.startswith(prefix):
-                continue
-            current_name = self._entry_name(entry)
-            original_name = qualified_name.rsplit('.', 1)[-1]
-            if name == original_name or name == current_name:
-                cache[cache_key] = (qualified_name, current_name)
-                return cache[cache_key]
-        cache[cache_key] = None
-        return None
-
-    def _set_current_class_var_name(self, qualified_name: str, current_name: str) -> None:
-        exports = self._current_class_vars_dict()
-        exports[qualified_name] = {'name': current_name, 'kind': 'class_var'}
-
-    def _current_class_path(self):
-        return self.class_path_stack[-1] if self.class_path_stack else None
-
-    def _current_class_name(self):
-        return self.class_name_stack[-1] if self.class_name_stack else None
-
-    def _current_class_var_map(self) -> dict:
-        # Cache the map for the current class path
-        class_path = self._current_class_path()
-        if self._cached_class_var_map is not None:
-            cached_path, cached_map = self._cached_class_var_map
-            if cached_path == class_path:
-                return cached_map
-        if class_path is None:
-            self._cached_class_var_map = (class_path, {})
-            return {}
-
-        exports = self._class_var_exports()
-        prefix = f'{class_path}.'
-        result = {
-            qualified_name.rsplit('.', 1)[-1]: self._entry_name(entry)
-            for qualified_name, entry in exports.items()
-            if qualified_name.startswith(prefix) and self._entry_kind(entry) in (None, 'class_var')
-        }
-        self._cached_class_var_map = (class_path, result)
-        return result
-    def _invalidate_caches(self):
-        self._cached_class_var_map = None
-        self._cached_entry_for_name.clear()
+    def _current_classvar_name_map(self):
+        return self._classvar_name_map_stack[-1] if self._classvar_name_map_stack else {}
 
     def _alias_assign(self, original_name: str, obfuscated_name: str, source_node) -> ast.Assign:
         return ast.Assign(
@@ -112,24 +39,15 @@ class ObfClassVariables(ast.NodeTransformer): # TODO: verify
             col_offset=getattr(source_node, 'col_offset', 0),
         )
 
-    def _is_in_class_scope(self) -> bool:
-        return bool(self.scope_stack) and self.scope_stack[-1] == 'class'
-
     def visit_Module(self, node):
-        self.scope_stack = []
-        self.scope_name_stack = []
-        self.class_name_stack = []
-        self.class_path_stack = []
-        self._invalidate_caches()
+        self.prefix_parts = [Node.Module(self.module_name)]
+        self._classvar_name_map_stack = []
         self.generic_visit(node)
         return node
 
     def visit_ClassDef(self, node):
-        self.scope_stack.append('class')
-        self.class_name_stack.append(node.name)
-        self.class_path_stack.append(self._qualified_name(self.module_name, *self.scope_name_stack, node.name))
-        self.scope_name_stack.append(node.name)
-        self._invalidate_caches()
+        self.prefix_parts.append(Node.Cls(node.name))
+        self._push_classvar_scope()
 
         new_body = []
         for stmt in node.body:
@@ -141,118 +59,119 @@ class ObfClassVariables(ast.NodeTransformer): # TODO: verify
 
         node.body = new_body
 
-        self.scope_name_stack.pop()
-        self.class_path_stack.pop()
-        self.class_name_stack.pop()
-        self.scope_stack.pop()
-        self._invalidate_caches()
+        self._pop_classvar_scope()
+        self.prefix_parts.pop()
         return node
 
     def visit_FunctionDef(self, node):
-        self.scope_stack.append('function')
-        self.scope_name_stack.append(node.name)
+        self.prefix_parts.append(Node.Def(node.name))
         self.generic_visit(node)
-        self.scope_name_stack.pop()
-        self.scope_stack.pop()
+        self.prefix_parts.pop()
         return node
 
     def visit_AsyncFunctionDef(self, node):
-        self.scope_stack.append('function')
-        self.scope_name_stack.append(node.name)
+        self.prefix_parts.append(Node.Def(node.name))
         self.generic_visit(node)
-        self.scope_name_stack.pop()
-        self.scope_stack.pop()
+        self.prefix_parts.pop()
         return node
 
     def visit_Assign(self, node):
         self.generic_visit(node)
-        if not self._is_in_class_scope():
-            return node
-
+        class_var_map = self._current_classvar_name_map() if self._classvar_name_map_stack else {}
         aliases = []
-        class_var_map = self._current_class_var_map()
         new_targets = []
-
-        for target in node.targets:
+        for target in node.targets: # default assign can have multiple targets
             if isinstance(target, ast.Name) and target.id in class_var_map:
                 original_name = target.id
-                obfuscated_name = class_var_map[original_name]
-                entry = self._class_var_entry_for_name(original_name)
+                obfuscated_name = class_var_map[original_name]['name']
                 target.id = obfuscated_name
                 target.ctx = ast.Store()
-                if entry is not None:
-                    self._set_current_class_var_name(entry[0], obfuscated_name)
                 new_targets.append(target)
                 aliases.append(self._alias_assign(original_name, obfuscated_name, node))
             else:
                 new_targets.append(target)
-
         node.targets = new_targets
         return [node, *aliases] if aliases else node
 
     def visit_AnnAssign(self, node):
         self.generic_visit(node)
-        if not self._is_in_class_scope():
-            return node
-
-        if isinstance(node.target, ast.Name):
-            class_var_map = self._current_class_var_map()
+        class_var_map = self._current_classvar_name_map() if self._classvar_name_map_stack else {}
+        if isinstance(node.target, ast.Name) and node.target.id in class_var_map:
             original_name = node.target.id
-            obfuscated_name = class_var_map.get(original_name)
-            if obfuscated_name is not None:
-                entry = self._class_var_entry_for_name(original_name)
-                node.target.id = obfuscated_name
-                node.target.ctx = ast.Store()
-                if entry is not None:
-                    self._set_current_class_var_name(entry[0], obfuscated_name)
-                alias = self._alias_assign(original_name, obfuscated_name, node)
-                return [node, alias]
+            obfuscated_name = class_var_map[original_name]['name']
+            node.target.id = obfuscated_name
+            node.target.ctx = ast.Store()
+            alias = self._alias_assign(original_name, obfuscated_name, node)
+            return [node, alias]
         return node
 
     def visit_AugAssign(self, node):
         self.generic_visit(node)
-        if not self._is_in_class_scope():
-            return node
-
-        if isinstance(node.target, ast.Name):
-            class_var_map = self._current_class_var_map()
+        class_var_map = self._current_classvar_name_map() if self._classvar_name_map_stack else {}
+        if isinstance(node.target, ast.Name) and node.target.id in class_var_map:
             original_name = node.target.id
-            obfuscated_name = class_var_map.get(original_name)
-            if obfuscated_name is not None:
-                entry = self._class_var_entry_for_name(original_name)
-                node.target.id = obfuscated_name
-                node.target.ctx = ast.Store()
-                if entry is not None:
-                    self._set_current_class_var_name(entry[0], obfuscated_name)
-                alias = self._alias_assign(original_name, obfuscated_name, node)
-                return [node, alias]
+            obfuscated_name = class_var_map[original_name]['name']
+            node.target.id = obfuscated_name
+            node.target.ctx = ast.Store()
+            alias = self._alias_assign(original_name, obfuscated_name, node)
+            return [node, alias]
         return node
 
     def visit_Name(self, node):
-        if self._is_in_class_scope() and isinstance(node.ctx, ast.Load):
-            class_var_map = self._current_class_var_map()
+        """
+        e.g.
+        class X:
+            var1 = 1
+            var2 = var1 * 2 # var1 needs to be obfuscated
+
+        """
+        # Only obfuscate class variable loads if in class scope and 100% sure
+        if ObfClassVariables.FIRST_PASS and self._classvar_name_map_stack and isinstance(node.ctx, ast.Load):
+            class_var_map = self._current_classvar_name_map()
             if node.id in class_var_map:
-                node.id = class_var_map[node.id]
+                node.id = class_var_map[node.id]['name']
         return node
 
+    def _resolve_classvar_from_attr(self, attr_node):
+        # Returns the obfuscated name for a classvar attribute chain, or None if not resolvable
+        if not self.module_name:
+            return None
+        names = []
+        node = attr_node
+        while isinstance(node, ast.Attribute):
+            names.append(node.attr)
+            node = node.value
+        if isinstance(node, ast.Name):
+            names.append(node.id)
+        else:
+            return None
+        names = list(reversed(names))
+        # Special case: self.x or cls.x in class scope
+        if names[0] in ('self', 'cls') and len(names) == 2 and self._classvar_name_map_stack:
+            var_name = names[1]
+            class_var_map = self._current_classvar_name_map()
+            if var_name in class_var_map:
+                return class_var_map[var_name]['name']
+        # Static/class attribute chain
+        for i in range(len(names)-1, 0, -1):
+            class_path = names[:i]
+            var_name = names[i]
+            label_path = [Node.Module(self.module_name)]
+            for cname in class_path:
+                label_path.append(Node.Cls(cname))
+            key = tuple((lbl.ltype, lbl.name) for lbl in label_path)
+            if key in self._classvar_name_map_cache:
+                classvars = self._classvar_name_map_cache[key]
+            else:
+                classvars = SYMBOL_MAP.get_classvars(label_path)
+                self._classvar_name_map_cache[key] = classvars
+            if var_name in classvars:
+                return classvars[var_name]['name']
+        return None
+
     def visit_Attribute(self, node):
-        if not self.class_name_stack:
-            return self.generic_visit(node)
-
-        class_var_map = self._current_class_var_map()
-        if not class_var_map:
-            return self.generic_visit(node)
-
-        root = node
-        attr_parts = []
-        while isinstance(root, ast.Attribute):
-            attr_parts.append(root.attr)
-            root = root.value
-
-        if isinstance(root, ast.Name):
-            current_class_name = self._current_class_name()
-            if root.id in {'self', 'cls', current_class_name} and node.attr in class_var_map:
-                node.attr = class_var_map[node.attr]
-
+        obf_name = self._resolve_classvar_from_attr(node)
+        if obf_name:
+            node.attr = obf_name
         self.generic_visit(node)
         return node
