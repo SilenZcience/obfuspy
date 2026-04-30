@@ -463,11 +463,11 @@ class DragDropWindow(QWidget):
         if current_item:
             self.list_widget.takeItem(self.list_widget.row(current_item[0]))
 
-    def print_order(self):
-        current_order = self.list_widget.get_items_order()
-        print('Current order of steps:')
-        for i, step in enumerate(current_order, 1):
-            print(f"{i}. {step.data(Qt.UserRole)}")
+    # def print_order(self):
+    #     current_order = self.list_widget.get_items_order()
+    #     print('Current order of steps:')
+    #     for i, step in enumerate(current_order, 1):
+    #         print(f"{i}. {step.data(Qt.UserRole)}")
 
     def _serialize_state(self) -> dict:
         layers = []
