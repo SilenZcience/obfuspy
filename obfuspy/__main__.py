@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 import argparse
 import os
+import sys
+
 from obfuspy.gui import GUI
 from obfuspy.util.domain import File_Module
 from obfuspy.util.obfuscator import Obfuscator
@@ -41,6 +43,7 @@ OBFUSCATION_LAYERS = {
     'Imports':                   ObfImports,
     'Anti-Tampering Statements': ObfAntiTampering,
 }
+sys.stdout.reconfigure(encoding='utf-8')
 
 
 def acc_py_files(arg_paths) -> set: # TODO: non python files should be copied to output folder without modification, maybe add option to ignore non python files
@@ -93,10 +96,16 @@ def main():
     settings['file_modules'] = file_modules
 
     Obfuscator.obfuscate(settings)
+    print('Writing obfuscated files')
     for file_module in file_modules:
-        print(f'Writing {file_module.out_path}...')
-        with open(file_module.out_path, 'w', encoding='utf-8') as f:
-            f.write(file_module.out_code)
+        try:
+            with open(file_module.out_path, 'w', encoding='utf-8') as f:
+                f.write(file_module.out_code)
+        except Exception as e:
+            print(f"Error occurred while saving {file_module.out_path}: {e}")
+            raise SystemExit(2)
+        print('.', end='', flush=True)
+    print()
 
 if __name__ == '__main__':
     main()
