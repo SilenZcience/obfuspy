@@ -219,7 +219,6 @@ if sum({tmp_var0} * ord({tmp_var1}) for {tmp_var0},{tmp_var1} in enumerate(''.jo
     @staticmethod
     def finalize_hash_nodes(out_code: str, file_module):
         o_code = out_code.splitlines()
-        # print(o_code)
         indexes = [i for i, line in enumerate(o_code) if ';;REPLACEMEHASH' in line]
         slices = []
         prev = 0
