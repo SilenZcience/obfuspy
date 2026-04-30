@@ -56,3 +56,5 @@ MANIFEST
 cmdtrix/
 obfuscated/
 testing/
+
+*.json
