@@ -4,7 +4,7 @@ from obfuspy.util.domain import SYMBOL_MAP
 from obfuspy.util.randomizer import Randomizer
 
 
-class ObfImports(ast.NodeTransformer): # TODO: add symboltable verification to ensure we only obfuscate actual imports and not local variables with same name
+class ObfImports(ast.NodeTransformer): # TODO: is_shadowed logic
     """
     Obfuscates import statements and corresponding usages.
     """

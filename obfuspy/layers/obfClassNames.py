@@ -112,7 +112,7 @@ class ObfClassNames(ast.NodeTransformer):
                 node.id = class_name_map[node.id]['name']
         return node
 
-    # def visit_Attribute(self, node):
+    # def visit_Attribute(self, node): # TODO: Class.classvar should obfusacte "Class"
     #     obf_name = self._resolve_class_name_from_attr(node)
     #     if obf_name:
     #         node.attr = obf_name
