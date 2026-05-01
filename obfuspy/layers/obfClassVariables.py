@@ -12,6 +12,7 @@ class ObfClassVariables(ast.NodeTransformer):
     def __init__(self, _, file_module) -> None:
         self.module_name = getattr(file_module, 'module_name', None)
         self.prefix_parts = []
+        self.scope_stack = [] # Stack of 'module', 'class', 'function
         self._classvar_name_map_stack = []  # Stack of dicts: {original_name: obf_value}
         self._classvar_name_map_cache = {}
 
@@ -41,12 +42,14 @@ class ObfClassVariables(ast.NodeTransformer):
 
     def visit_Module(self, node):
         self.prefix_parts = [Node.Module(self.module_name)]
+        self.scope_stack.append('module')
         self._classvar_name_map_stack = []
         self.generic_visit(node)
         return node
 
     def visit_ClassDef(self, node):
         self.prefix_parts.append(Node.Cls(node.name))
+        self.scope_stack.append('class')
         self._push_classvar_scope()
 
         new_body = []
@@ -60,18 +63,23 @@ class ObfClassVariables(ast.NodeTransformer):
         node.body = new_body
 
         self._pop_classvar_scope()
+        self.scope_stack.pop()
         self.prefix_parts.pop()
         return node
 
     def visit_FunctionDef(self, node):
         self.prefix_parts.append(Node.Def(node.name))
+        self.scope_stack.append('function')
         self.generic_visit(node)
+        self.scope_stack.pop()
         self.prefix_parts.pop()
         return node
 
     def visit_AsyncFunctionDef(self, node):
         self.prefix_parts.append(Node.Def(node.name))
+        self.scope_stack.append('function')
         self.generic_visit(node)
+        self.scope_stack.pop()
         self.prefix_parts.pop()
         return node
 
@@ -126,7 +134,7 @@ class ObfClassVariables(ast.NodeTransformer):
 
         """
         # Only obfuscate class variable loads if in class scope and 100% sure
-        if ObfClassVariables.FIRST_PASS and self._classvar_name_map_stack and isinstance(node.ctx, ast.Load):
+        if ObfClassVariables.FIRST_PASS and self.scope_stack[-1] == 'class' and isinstance(node.ctx, ast.Load):
             class_var_map = self._current_classvar_name_map()
             if node.id in class_var_map:
                 node.id = class_var_map[node.id]['name']
@@ -152,21 +160,14 @@ class ObfClassVariables(ast.NodeTransformer):
             class_var_map = self._current_classvar_name_map()
             if var_name in class_var_map:
                 return class_var_map[var_name]['name']
-        # Static/class attribute chain
-        for i in range(len(names)-1, 0, -1):
-            class_path = names[:i]
-            var_name = names[i]
-            label_path = [Node.Module(self.module_name)]
-            for cname in class_path:
-                label_path.append(Node.Cls(cname))
-            key = tuple((lbl.ltype, lbl.name) for lbl in label_path)
-            if key in self._classvar_name_map_cache:
-                classvars = self._classvar_name_map_cache[key]
-            else:
-                classvars = SYMBOL_MAP.get_classvars(label_path)
-                self._classvar_name_map_cache[key] = classvars
-            if var_name in classvars:
-                return classvars[var_name]['name']
+
+        label_path = [Node.Module(self.module_name)]
+        for i in range(0, len(names)-1):
+            label_path.append(Node.Cls(names[i]))
+        label_path.append(Node.ClassVar.ltype + names[-1])
+        obf_value = SYMBOL_MAP.get(label_path)
+        if obf_value:
+            return obf_value['name']
         return None
 
     def visit_Attribute(self, node):
