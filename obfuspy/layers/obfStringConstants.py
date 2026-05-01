@@ -21,6 +21,7 @@ class ObfStringConstants(ast.NodeTransformer):
     """
     Obfuscates string constants.
     """
+
     def __init__(self, randomizer: Randomizer, _) -> None:
         self.randomizer = randomizer
 

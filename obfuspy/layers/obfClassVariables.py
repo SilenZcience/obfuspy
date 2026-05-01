@@ -7,6 +7,7 @@ class ObfClassVariables(ast.NodeTransformer):
     """
     Obfuscates class variables.
     """
+
     FIRST_PASS = True
 
     def __init__(self, _, file_module) -> None:

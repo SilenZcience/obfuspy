@@ -5,8 +5,9 @@ from obfuspy.util.domain import SYMBOL_MAP, Node
 
 class ObfDefnames(ast.NodeTransformer):
     """
-    Obfuscates function names and all function calls with obfuscated names using symbol map.
+    Obfuscates function names.
     """
+
     FIRST_PASS = True
 
     def __init__(self, _, file_module) -> None:

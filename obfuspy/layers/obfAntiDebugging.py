@@ -99,8 +99,10 @@ ANTI_DEBUG_LAMBDA = [
 
 class ObfAntiDebugging(ast.NodeTransformer):
     """
-    Adds anti-debugging code.
+    Inserts anti-debugging code randomely in the file which will crash the program unexpectedly if a debugger is detected.
+    The anti-debugging code is inserted with the given probability between every line.
     """
+
     def __init__(self, randomizer, __, probability: float) -> None:
         self.randomizer = randomizer
         self.probability = probability

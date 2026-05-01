@@ -119,8 +119,9 @@ def _collect_defined_names(file_module) -> set:
 
 class ObfBuiltins(ast.NodeTransformer):
     """
-    Obfuscates builtins.
+    Obfuscates builtins to use a random name as an alias instead.
     """
+
     def __init__(self, randomizer: Randomizer, file_module) -> None:
         self.randomizer = randomizer
         self.builtin_map = {

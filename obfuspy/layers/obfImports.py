@@ -8,6 +8,7 @@ class ObfImports(ast.NodeTransformer): # TODO: is_shadowed logic
     """
     Obfuscates import statements and corresponding usages.
     """
+
     def __init__(self, randomizer: Randomizer, file_module) -> None:
         self.randomizer = randomizer
         self.file_module = file_module

@@ -7,6 +7,7 @@ class ObfModuleVariables(ast.NodeTransformer):
     """
     Obfuscates module-level variables.
     """
+
     def __init__(self, _, file_module) -> None:
         self.file_module = file_module
         self.symtable = file_module.symtable

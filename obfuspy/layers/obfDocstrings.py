@@ -7,6 +7,7 @@ class ObfDocStrings(ast.NodeTransformer): # TODO: maybe confusing text instead o
     """
     Obfuscates docstrings (__doc__).
     """
+
     def __init__(self, randomizer: Randomizer, _) -> None:
         self.randomizer = randomizer
 

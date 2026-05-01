@@ -3,8 +3,9 @@ import ast
 
 class ObfAssignements(ast.NodeTransformer):
     """
-    Obfuscates assignments.
+    Obfuscates simple assignments by splitting tuple-assignements and chained assignements into multiple lines.
     """
+
     def __init__(self, _, __) -> None:
         pass
 

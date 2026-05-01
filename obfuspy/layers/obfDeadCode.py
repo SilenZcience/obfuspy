@@ -5,8 +5,10 @@ from obfuspy.util.randomizer import Randomizer
 
 class ObfDeadCode(ast.NodeTransformer):
     """
-    Inserts dead code.
+    Inserts dead code randomely in the file which does nothing but add noise.
+    The dead code is inserted with the given probability between every line.
     """
+
     def __init__(self, randomizer: Randomizer, _, probability: float) -> None:
         self.randomizer = randomizer
         self.probability = probability

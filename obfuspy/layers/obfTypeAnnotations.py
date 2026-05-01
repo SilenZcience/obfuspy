@@ -4,8 +4,9 @@ import random
 
 class ObfTypeAnnotations(ast.NodeTransformer):
     """
-    Obfuscates type annotations in function definitions and assignments.
+    Obfuscates type annotations in function/method headers and assignments.
     """
+
     def __init__(self, _, __) -> None:
         pass
 

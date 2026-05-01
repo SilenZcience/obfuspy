@@ -9,6 +9,7 @@ class ObfDefArguments(ast.NodeTransformer):
     """
     Obfuscates function/method arguments.
     """
+
     def __init__(self, randomizer: Randomizer, file_module):
         self.randomizer = randomizer
         self.module_name = getattr(file_module, 'module_name', None)

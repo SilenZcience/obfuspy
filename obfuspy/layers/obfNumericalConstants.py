@@ -27,8 +27,9 @@ ONE_LAMBDAS = [
 
 class ObfNumericalConstants(ast.NodeTransformer):
     """
-    Obfuscates numerical constants(int and float literals).
+    Obfuscates numerical constants (int and float literals) with the given denominator.
     """
+
     def __init__(self, _, __, numerical_denominator: str) -> None:
         self.numerical_denominator = int(numerical_denominator)
 

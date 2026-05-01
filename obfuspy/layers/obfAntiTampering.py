@@ -76,8 +76,10 @@ with open(__file__, 'r') as f:
 
 class ObfAntiTampering(ast.NodeTransformer):
     """
-    Adds anti-tampering code.
+    Inserts anti-tampering code randomely in the file which will crash the program unexpectedly if the file is modified.
+    The anti-tampering code is inserted with the given probability between every line.
     """
+
     HASH_NODES = {}
     HASH_ID = 0
 
