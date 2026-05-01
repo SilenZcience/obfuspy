@@ -102,8 +102,7 @@ def main():
             with open(file_module.out_path, 'w', encoding='utf-8') as f:
                 f.write(file_module.out_code)
         except Exception as e:
-            print(f"Error occurred while saving {file_module.out_path}: {e}")
-            raise SystemExit(2)
+            raise Exception(f"Failed to save obfuscated file {file_module.out_path}") from e
         print('.', end='', flush=True)
     print()
 

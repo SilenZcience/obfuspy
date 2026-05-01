@@ -446,8 +446,7 @@ class Obfuscator:
                     l = layer(randomizer, file_module, *args)
                     l.visit(file_module.tree)
                 except Exception as e:
-                    print(f"Error occurred while processing {file_module.in_path}: {e}")
-                    raise SystemExit(1)
+                    raise Exception(f"Failed to apply layer {layer.__name__} to file {file_module.in_path}") from e
                 print('.', end='', flush=True)
                 if any(isinstance(l, obfLayer) for obfLayer in (ObfStringConstants, ObfNumericalConstants, ObfBuiltins)):
                     ObfAntiTampering.HASH_NODES[file_module] = {k: v+[l] for k, v in ObfAntiTampering.HASH_NODES.get(file_module, {}).items()}
@@ -470,8 +469,7 @@ class Obfuscator:
                 out_code = prefix + out_code + post_fix
                 out_code = ObfAntiTampering.finalize_hash_nodes(out_code, file_module)
             except Exception as e:
-                print(f"Error occurred while finalizing {file_module.in_path}: {e}")
-                raise SystemExit(2)
+                raise Exception(f"Failed to finalize file {file_module.in_path}") from e
             print('.', end='', flush=True)
 
             file_module.set_code(out_code)
