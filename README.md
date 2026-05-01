@@ -78,6 +78,27 @@
 
 A simple Python Obfuscator.
 
+> [!CAUTION]
+> obfuspy does not protect against deobfuscation and may include bugs that break the code execution. <br/>
+> use at your own risk!
+
+obfuspy curently includes the following obfuscation layers:
+- Dead Code
+- Anti-Debug Statements
+- Numerical Constants
+- String Constants
+- Docstrings
+- Assignements
+- Type Annotations
+- Builtins
+- Function Arguments
+- Function Names
+- Class Names
+- Local Variables
+- Class Variables
+- Module Variables
+- Imports
+- Anti-Tampering Statements
 
 <div id="made-with"></div>
 
