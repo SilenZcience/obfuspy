@@ -5,6 +5,7 @@ import os
 import sys
 
 from obfuspy.gui import GUI
+from obfuspy.util.color_gen import RGB_GRADIENT
 from obfuspy.util.domain import File_Module
 from obfuspy.util.obfuscator import Obfuscator
 
@@ -101,10 +102,11 @@ def main():
         try:
             with open(file_module.out_path, 'w', encoding='utf-8') as f:
                 f.write(file_module.out_code)
-        except Exception as e:
+        except (Exception, KeyboardInterrupt) as e:
+            print('\x1b[0m', flush=True, file=sys.stderr)
             raise Exception(f"Failed to save obfuscated file {file_module.out_path}") from e
-        print('.', end='', flush=True)
-    print()
+        print(f"{next(RGB_GRADIENT)}·", end='', flush=True)
+    print('\x1b[0m', flush=True)
 
 if __name__ == '__main__':
     main()

@@ -18,9 +18,11 @@ from obfuspy.layers.obfModuleVariables import ObfModuleVariables
 from obfuspy.layers.obfNumericalConstants import ObfNumericalConstants
 from obfuspy.layers.obfStringConstants import ObfStringConstants
 from obfuspy.util.charsets import CHARSETS
+from obfuspy.util.color_gen import RGB_GRADIENT
 from obfuspy.util.domain import SYMBOL_MAP, Node
 from obfuspy.util.randomizer import ALL_BUILTINS, Randomizer
 from obfuspy.util.unparser import unparse
+
 
 OBFUSCATE_NUMBERS = True
 NUMERICAL_DENOMINATOR = 6
@@ -439,15 +441,18 @@ class Obfuscator:
             randomizer,
         )
 
+        RGB_GRADIENT.send(len(file_modules) * (len(settings['obf_layers']) + 2) + len(settings['obf_layers']))
+
         for layer, args in settings['obf_layers']:
-            print('Applying obfuscation layer:', layer.__name__)
+            print(f"{next(RGB_GRADIENT)}Applying obfuscation layer: {layer.__name__}")
             for file_module in file_modules:
                 try:
                     l = layer(randomizer, file_module, *args)
                     l.visit(file_module.tree)
-                except Exception as e:
+                except (Exception, KeyboardInterrupt) as e:
+                    print('\x1b[0m', flush=True)
                     raise Exception(f"Failed to apply layer {layer.__name__} to file {file_module.in_path}") from e
-                print('.', end='', flush=True)
+                print(f"{next(RGB_GRADIENT)}·", end='', flush=True)
                 if any(isinstance(l, obfLayer) for obfLayer in (ObfStringConstants, ObfNumericalConstants, ObfBuiltins)):
                     ObfAntiTampering.HASH_NODES[file_module] = {k: v+[l] for k, v in ObfAntiTampering.HASH_NODES.get(file_module, {}).items()}
             print()
@@ -468,9 +473,10 @@ class Obfuscator:
 
                 out_code = prefix + out_code + post_fix
                 out_code = ObfAntiTampering.finalize_hash_nodes(out_code, file_module)
-            except Exception as e:
+            except (Exception, KeyboardInterrupt) as e:
+                print('\x1b[0m', flush=True)
                 raise Exception(f"Failed to finalize file {file_module.in_path}") from e
-            print('.', end='', flush=True)
+            print(f"{next(RGB_GRADIENT)}·", end='', flush=True)
 
             file_module.set_code(out_code)
         print()
