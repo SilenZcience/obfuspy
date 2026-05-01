@@ -144,14 +144,18 @@ class SymbolMap:
         """
         return self._get_ltypes(label_path, Node.DefArg.ltype)
 
-    def get(self, label_path: list[Label]):
+    def get_node(self, label_path: list[Label]):
         node = self.root
         for label in label_path:
             candidates = node.children.get(str(label))
             if not candidates:
                 return None
             node = candidates[0]
-        return node.obf_value
+        return node
+
+    def get(self, label_path: list[Label]):
+        node = self.get_node(label_path)
+        return node.obf_value if node else None
 
     def find_import(self, module_name: str, name: str):
         module_name_split = module_name.split('.')
