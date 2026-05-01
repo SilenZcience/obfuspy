@@ -139,14 +139,12 @@ A GUI will open to select the obfuscation configuration.
 ### Examples
 
 <details open>
-   <summary><b>📂 Images 📂</b></summary>
-   </br>
-
-   <p float="left">
-      <img src="https://raw.githubusercontent.com/SilenZcience/obfuspy/main/img/example_gui.png" width="49%"/>
-      <img src="https://raw.githubusercontent.com/SilenZcience/obfuspy/main/img/example_code.png" width="49%"/>
-   </p>
-
+    <summary><b>📂 Images 📂</b></summary>
+    </br>
+    <p style="display: flex; align-items: center; gap: 2%;">
+        <img src="https://raw.githubusercontent.com/SilenZcience/obfuspy/main/img/example_gui.png" width="49%"/>
+        <img src="https://raw.githubusercontent.com/SilenZcience/obfuspy/main/img/example_code.png" width="49%"/>
+    </p>
 </details>
 </br>
 
