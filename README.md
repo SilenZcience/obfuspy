@@ -204,7 +204,7 @@ This project is licensed under the MIT License - see the [LICENSE](https://githu
 [OS-Linux]: https://img.shields.io/badge/os-linux-green?label=OS
 [OS-MacOS]: https://img.shields.io/badge/os-macOS-green?label=OS
 
-[GitHub-Last-Commit]: https://img.shields.io/github/last-commit/SilenZcience/obfuspy/dev
+[GitHub-Last-Commit]: https://img.shields.io/github/last-commit/SilenZcience/obfuspy/main
 [GitHub-Issues]: https://img.shields.io/github/issues/SilenZcience/obfuspy
 [GitHub-Release]: https://img.shields.io/github/v/release/SilenZcience/obfuspy?label=Github
 [GitHub-Release-Date]: https://img.shields.io/github/release-date/SilenZcience/obfuspy?label=Release%20Date
