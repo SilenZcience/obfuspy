@@ -121,7 +121,7 @@ obfuspy curently includes the following obfuscation layers:
 
 ### Prerequisites
 
-Using obfuspy as a `Python Package` demands a Python-Interpreter (>= 3.6).
+Using obfuspy as a `Python Package` demands a Python-Interpreter (>= 3.9).
 
 
 <div id="installation"></div>
