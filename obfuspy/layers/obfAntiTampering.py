@@ -28,7 +28,7 @@ AST_NODE_TYPES = {
     ast.FunctionDef,
     ast.AsyncFunctionDef, # TODO: gets fucked by dead code
 }# TODO: this is too weak
-# TODO: more variety
+# TODO: more variety, define at one point, kill later on
 # exit(0)
 # verify:
 # with open(__file__, 'r', encoding='utf-8') as f:

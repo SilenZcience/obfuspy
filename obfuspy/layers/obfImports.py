@@ -4,7 +4,7 @@ from obfuspy.util.domain import SYMBOL_MAP
 from obfuspy.util.randomizer import Randomizer
 
 
-class ObfImports(ast.NodeTransformer): # TODO: is_shadowed logic
+class ObfImports(ast.NodeTransformer):
     """
     Obfuscates import statements and corresponding usages.
     """
@@ -14,9 +14,11 @@ class ObfImports(ast.NodeTransformer): # TODO: is_shadowed logic
         self.file_module = file_module
         self.module_name = getattr(file_module, 'module_name', None)
         self._import_alias_stack = []  # Stack of dicts: {local_name: obf_name}
+        self._shadowed_names_stack = []  # Stack of sets: names that are shadowed in current scope
 
-    def _push_import_scope(self):
+    def _push_import_scope(self, node):
         self._import_alias_stack.append({})
+        self._collect_import_aliases(node)
 
     def _pop_import_scope(self):
         if self._import_alias_stack:
@@ -25,32 +27,49 @@ class ObfImports(ast.NodeTransformer): # TODO: is_shadowed logic
     def _current_import_aliases(self):
         return self._import_alias_stack[-1] if self._import_alias_stack else {}
 
+    def _push_shadowed_names_scope(self):
+        self._shadowed_names_stack.append(set())
+
+    def _pop_shadowed_names_scope(self):
+        if self._shadowed_names_stack:
+            self._shadowed_names_stack.pop()
+
+    def _current_shadowed_names(self):
+        return self._shadowed_names_stack[-1] if self._shadowed_names_stack else set()
+
     def visit_Module(self, node):
         self._import_alias_stack = []
-        self._push_import_scope()
-        self._collect_import_aliases(node)
+        self._push_import_scope(node)
+        self._push_shadowed_names_scope()
         self.generic_visit(node)
+        self._pop_shadowed_names_scope()
         self._pop_import_scope()
         return node
 
     def visit_ClassDef(self, node):
-        self._push_import_scope()
-        self._collect_import_aliases(node)
+        self._push_import_scope(node)
+        self._current_shadowed_names().add(node.name)
+        self._push_shadowed_names_scope()
         self.generic_visit(node)
+        self._pop_shadowed_names_scope()
         self._pop_import_scope()
         return node
 
     def visit_FunctionDef(self, node):
-        self._push_import_scope()
-        self._collect_import_aliases(node)
+        self._push_import_scope(node)
+        self._current_shadowed_names().add(node.name)
+        self._push_shadowed_names_scope()
         self.generic_visit(node)
+        self._pop_shadowed_names_scope()
         self._pop_import_scope()
         return node
 
     def visit_AsyncFunctionDef(self, node):
-        self._push_import_scope()
-        self._collect_import_aliases(node)
+        self._push_import_scope(node)
+        self._current_shadowed_names().add(node.name)
+        self._push_shadowed_names_scope()
         self.generic_visit(node)
+        self._pop_shadowed_names_scope()
         self._pop_import_scope()
         return node
 
@@ -104,12 +123,89 @@ class ObfImports(ast.NodeTransformer): # TODO: is_shadowed logic
                 name.asname = alias_map[local]['asname']
         return node
 
+    def visit_Assign(self, node):
+        shadowed_names = self._current_shadowed_names()
+        for target in node.targets:
+            if isinstance(target, ast.Name):
+                shadowed_names.add(target.id)
+            elif isinstance(target, (ast.Tuple, ast.List)):
+                for elt in target.elts:
+                    if isinstance(elt, ast.Name):
+                        shadowed_names.add(elt.id)
+        self.generic_visit(node)
+        return node
+
+    def visit_AnnAssign(self, node):
+        shadowed_names = self._current_shadowed_names()
+        target = node.target
+        if isinstance(target, ast.Name):
+            shadowed_names.add(target.id)
+        self.generic_visit(node)
+        return node
+
+    def visit_AugAssign(self, node):
+        shadowed_names = self._current_shadowed_names()
+        target = node.target
+        if isinstance(target, ast.Name):
+            shadowed_names.add(target.id)
+        self.generic_visit(node)
+        return node
+
+    def visit_For(self, node):
+        shadowed_names = self._current_shadowed_names()
+        target = node.target
+        if isinstance(target, ast.Name):
+            shadowed_names.add(target.id)
+        elif isinstance(target, (ast.Tuple, ast.List)):
+            for elt in target.elts:
+                if isinstance(elt, ast.Name):
+                    shadowed_names.add(elt.id)
+        self.generic_visit(node)
+        return node
+
+    def visit_AsyncFor(self, node):
+        shadowed_names = self._current_shadowed_names()
+        target = node.target
+        if isinstance(target, ast.Name):
+            shadowed_names.add(target.id)
+        elif isinstance(target, (ast.Tuple, ast.List)):
+            for elt in target.elts:
+                if isinstance(elt, ast.Name):
+                    shadowed_names.add(elt.id)
+        self.generic_visit(node)
+        return node
+
+    def visit_With(self, node):
+        shadowed_names = self._current_shadowed_names()
+        for item in node.items:
+            if item.optional_vars and isinstance(item.optional_vars, ast.Name):
+                shadowed_names.add(item.optional_vars.id)
+        self.generic_visit(node)
+        return node
+
+    def visit_AsyncWith(self, node):
+        shadowed_names = self._current_shadowed_names()
+        for item in node.items:
+            if item.optional_vars and isinstance(item.optional_vars, ast.Name):
+                shadowed_names.add(item.optional_vars.id)
+        self.generic_visit(node)
+        return node
+
     def visit_Name(self, node):
         for import_stack in reversed(self._import_alias_stack):
             if not node.id in import_stack:
                 continue
-            node.id = import_stack[node.id]['asname']
             break
+        else:
+            return node
+
+        # NOTE: this is not fully working, as the assignement or import can be in a branch .. static analysis would be overkill ...
+        # perhaps its fine to just blindly obfuscate everything with that name.
+        # for shadowed_stack in reversed(self._shadowed_names_stack):
+        #     if node.id in shadowed_stack:
+        #         return node
+
+        node.id = import_stack[node.id]['asname']
         return node
 
     # def visit_Attribute(self, node):

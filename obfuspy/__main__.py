@@ -26,6 +26,11 @@ from obfuspy.layers.obfModuleVariables import ObfModuleVariables
 from obfuspy.layers.obfLocalVariables import ObfLocalVariables
 from obfuspy.layers.obfClassNames import ObfClassNames
 
+# TODO: layer ideas:
+# wrap statements in exec
+# do attr calls with gettattr
+# use exceptions for control flow instead of returns
+# use globals() and locas() for var access
 OBFUSCATION_LAYERS = {
     'Dead Code':                 ObfDeadCode,
     'Anti-Debug Statements':     ObfAntiDebugging,
