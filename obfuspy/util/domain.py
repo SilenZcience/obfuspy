@@ -185,6 +185,8 @@ class SymbolMap:
         return node.obf_value if node else None
 
     def find_import(self, module_name: str, name: str):
+        if not module_name:
+            return None
         module_name_split = module_name.split('.')
         for i in range(len(module_name_split)):
             suffix = '.'.join(module_name_split[i:])

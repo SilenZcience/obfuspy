@@ -1,4 +1,5 @@
 import ast
+import os
 
 from obfuspy.util.domain import SYMBOL_MAP
 from obfuspy.util.randomizer import Randomizer
@@ -36,6 +37,31 @@ class ObfImports(ast.NodeTransformer):
 
     def _current_shadowed_names(self):
         return self._shadowed_names_stack[-1] if self._shadowed_names_stack else set()
+
+    def _resolve_import_module_name(self, node):
+        module_name = self.module_name
+        if node.level == 0:
+            return node.module
+
+        if not module_name:
+            return node.module
+
+        if self.file_module and os.path.basename(self.file_module.in_path) == '__init__.py':
+            package_name = module_name
+        else:
+            package_name = module_name.rsplit('.', 1)[0] if '.' in module_name else ''
+
+        package_parts = package_name.split('.') if package_name else []
+        relative_levels = node.level - 1
+        if relative_levels > len(package_parts):
+            return None
+        if relative_levels:
+            package_parts = package_parts[:len(package_parts) - relative_levels]
+
+        resolved_package = '.'.join(package_parts)
+        if node.module:
+            return f"{resolved_package}.{node.module}" if resolved_package else node.module
+        return resolved_package or None
 
     def visit_Module(self, node):
         self._import_alias_stack = []
@@ -89,7 +115,8 @@ class ObfImports(ast.NodeTransformer):
                     if name.name == '*':
                         continue
                     local = name.asname or name.name
-                    imported_node = SYMBOL_MAP.find_import(stmt.module, name.name)
+                    imported_module = self._resolve_import_module_name(stmt)
+                    imported_node = SYMBOL_MAP.find_import(imported_module, name.name)
                     if imported_node and hasattr(imported_node, 'greyed_out'): # indicates that is was actually obfusacted
                         alias_map[local] = {
                             'name': imported_node.obf_value['name'],
