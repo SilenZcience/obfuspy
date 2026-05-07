@@ -25,12 +25,12 @@ from obfuspy.layers.obfClassVariables import ObfClassVariables
 from obfuspy.layers.obfModuleVariables import ObfModuleVariables
 from obfuspy.layers.obfLocalVariables import ObfLocalVariables
 from obfuspy.layers.obfClassNames import ObfClassNames
+from obfuspy.layers.obfGlobals import ObfGlobals
 
 # TODO: layer ideas:
 # wrap statements in exec
 # do attr calls with gettattr
 # use exceptions for control flow instead of returns
-# use globals() and locas() for var access
 OBFUSCATION_LAYERS = {
     'Dead Code':                 ObfDeadCode,
     'Anti-Debug Statements':     ObfAntiDebugging,
@@ -48,6 +48,7 @@ OBFUSCATION_LAYERS = {
     'Module Variables':          ObfModuleVariables,
     'Imports':                   ObfImports,
     'Anti-Tampering Statements': ObfAntiTampering,
+    'Globals':                   ObfGlobals,
 }
 sys.stdout.reconfigure(encoding='utf-8')
 

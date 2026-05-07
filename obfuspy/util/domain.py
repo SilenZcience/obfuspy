@@ -109,39 +109,66 @@ class SymbolMap:
             node.add_child(new_label, new_child)
         return result
 
-    def get_classes(self, label_path: list[Label]) -> dict:
+    def _get_all_ltypes(self, label_path: list[Label], ltype: str) -> dict:
+        node = self.root
+        for label in label_path:
+            candidates = node.children.get(str(label))
+            if not candidates:
+                return {}
+            node = candidates[0]
+
+        result = {}
+        for _, child_nodes in node.children.items():
+            for child in child_nodes:
+                if getattr(child.label, 'ltype', None) == ltype:
+                    orig_name = child.label.name
+                    if child.obf_value:
+                        result[orig_name] = child.obf_value
+        return result
+
+    def get_classes(self, label_path: list[Label], get_all: bool = False) -> dict:
         """
         Given a list of Label objects representing the path to a node,
         return a dict {original_name: obfuscated_name} for all direct class children.
         """
+        if get_all:
+            return self._get_all_ltypes(label_path, Node.Cls.ltype)
         return self._get_ltypes(label_path, Node.Cls.ltype)
 
-    def get_functions(self, label_path: list[Label]) -> dict:
+    def get_functions(self, label_path: list[Label], get_all: bool = False) -> dict:
         """
         Given a list of Label objects representing the path to a node,
         return a dict {original_name: obfuscated_name} for all direct function children.
         """
+        if get_all:
+            return self._get_all_ltypes(label_path, Node.Def.ltype)
         return self._get_ltypes(label_path, Node.Def.ltype)
 
-    def get_modulevars(self, label_path: list[Label]) -> dict:
+    def get_modulevars(self, label_path: list[Label], get_all: bool = False) -> dict:
         """
         Given a list of Label objects representing the path to a node,
         return a dict {original_name: obfuscated_name} for all direct modulevar children.
         """
+        if get_all:
+            return self._get_all_ltypes(label_path, Node.ModVar.ltype)
         return self._get_ltypes(label_path, Node.ModVar.ltype)
 
-    def get_classvars(self, label_path: list[Label]) -> dict:
+    def get_classvars(self, label_path: list[Label], get_all: bool = False) -> dict:
         """
         Given a list of Label objects representing the path to a node,
         return a dict {original_name: obfuscated_name} for all direct classvar children.
         """
+        if get_all:
+            return self._get_all_ltypes(label_path, Node.ClassVar.ltype)
         return self._get_ltypes(label_path, Node.ClassVar.ltype)
 
-    def get_defargs(self, label_path: list[Label]) -> dict:
+    def get_defargs(self, label_path: list[Label], get_all: bool = False) -> dict:
         """
         Given a list of Label objects representing the path to a node,
         return a dict {original_name: obfuscated_name} for all direct defarg children.
         """
+        if get_all:
+            return self._get_all_ltypes(label_path, Node.DefArg.ltype)
         return self._get_ltypes(label_path, Node.DefArg.ltype)
 
     def get_node(self, label_path: list[Label]):
