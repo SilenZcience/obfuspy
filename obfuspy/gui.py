@@ -147,7 +147,7 @@ class DragDropWindow(QWidget):
                 border-radius: 4px;
             }
             QPushButton:hover {
-                background-color: #15e304;
+                background-color: #0eb00e;
             }
         """)
         remove_button = QPushButton('Remove Layer')
@@ -323,7 +323,7 @@ class DragDropWindow(QWidget):
                 margin: 0 2px;
             }
             QPushButton:hover {
-                background-color: #15e304;
+                background-color: #0eb00e;
             }
         """)
         settings_layout.addWidget(action_button)
@@ -334,12 +334,12 @@ class DragDropWindow(QWidget):
             QPushButton {
                 background-color: #00ff00;
                 color: #202020;
-                padding: 8px 20px;
+                padding: 4px 20px;
                 border-radius: 4px;
                 margin: 0 2px;
             }
             QPushButton:hover {
-                background-color: #15e304;
+                background-color: #0eb00e;
             }
         """)
         settings_layout.addWidget(add_ten_button)
@@ -418,7 +418,7 @@ class DragDropWindow(QWidget):
                 border-radius: 4px;
             }
             QPushButton:hover {
-                background-color: #15e304;
+                background-color: #0eb00e;
             }
         """)
 
