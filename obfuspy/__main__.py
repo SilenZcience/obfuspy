@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import argparse
 import os
+import shutil
 import sys
 
 from obfuspy.gui import GUI
@@ -54,8 +55,8 @@ OBFUSCATION_LAYERS = {
 sys.stdout.reconfigure(encoding='utf-8')
 
 
-def acc_py_files(arg_paths) -> set: # TODO: non python files should be copied to output folder without modification, maybe add option to ignore non python files
-    file_modules = set()
+def acc_py_files(arg_paths, copy_non_py: bool = False) -> tuple:
+    file_modules, non_py_files = set(), set()
     for path in arg_paths:
         if os.path.isfile(path):
             out_file = os.path.join(os.path.dirname(path), 'obfuscated', os.path.basename(path))
@@ -63,6 +64,9 @@ def acc_py_files(arg_paths) -> set: # TODO: non python files should be copied to
             if split_ext[1] in ['.py', '.py3', '.pyw', '.pyi']:
                 os.makedirs(os.path.dirname(out_file), exist_ok=True)
                 file_modules.add(File_Module(path, out_file))
+            elif copy_non_py:
+                os.makedirs(os.path.dirname(out_file), exist_ok=True)
+                non_py_files.add((path, out_file))
             continue
         if os.path.isdir(path):
             abs_path = os.path.abspath(path)
@@ -77,23 +81,28 @@ def acc_py_files(arg_paths) -> set: # TODO: non python files should be copied to
                     if split_ext[1] in ['.py', '.py3', '.pyw', '.pyi']:
                         os.makedirs(os.path.dirname(out_file), exist_ok=True)
                         file_modules.add(File_Module(in_file, out_file))
-    return file_modules
+                    elif copy_non_py:
+                        os.makedirs(os.path.dirname(out_file), exist_ok=True)
+                        non_py_files.add((in_file, out_file))
+    return file_modules, non_py_files
 
-def main(paths=None, json_settings=None):
+def main(paths=None, json_settings=None, copy_non_py=False):
     if paths is None and json_settings is None:
         parser = argparse.ArgumentParser(description='obfuscate a python file/module.')
         parser.add_argument('PATH', action='store', default=None,
                             nargs='+', help='FILE(s) and/or FOLDER(s) to obfuscate')
         parser.add_argument('--json', action='store', help='Path to JSON file to load settings from (overrides GUI)',
                             default=None)
+        parser.add_argument('--copy-non-py', action='store_true', help='Copy non-Python files to output folder without modification')
         args = parser.parse_args()
         paths = args.PATH
         json_settings = args.json
+        copy_non_py = args.copy_non_py
 
     if paths and all(isinstance(path, File_Module) for path in paths):
-        file_modules = set(paths)
+        file_modules, non_py_files = set(paths), set()
     else:
-        file_modules = acc_py_files(paths or [])
+        file_modules, non_py_files = acc_py_files(paths or [], copy_non_py=copy_non_py)
 
     gui = GUI(OBFUSCATION_LAYERS)
     if json_settings:
@@ -119,6 +128,8 @@ def main(paths=None, json_settings=None):
             print('\x1b[0m', flush=True, file=sys.stderr)
             raise Exception(f"Failed to save obfuscated file {file_module.out_path}") from e
         print(f"{next(RGB_GRADIENT)}·", end='', flush=True)
+    for in_file, out_file in non_py_files:
+        shutil.copyfile(in_file, out_file)
     print('\x1b[0m', flush=True)
 
 if __name__ == '__main__':
