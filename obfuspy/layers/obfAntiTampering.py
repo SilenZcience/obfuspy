@@ -112,13 +112,14 @@ class ObfAntiTampering(ast.NodeTransformer):
         tmp_var = next(self.randomizer.random_name_gen)
         tmp_var0 = next(self.randomizer.random_name_gen)
         tmp_var1 = next(self.randomizer.random_name_gen)
-        anti_tampering_stmt = ast.parse(f"""{tmp_var} = ';;REPLACEMEHASH'
+        placeholder = f";;REPLACEMEHASH{ObfAntiTampering.HASH_ID}"
+        anti_tampering_stmt = ast.parse(f"""{tmp_var} = '{placeholder}'
 if sum({tmp_var0} * ord({tmp_var1}) for {tmp_var0},{tmp_var1} in enumerate(''.join(__import__('builtins').open(__file__, 'r', encoding='utf-8').read().splitlines()[int({tmp_var}.split(';')[0]) : int({tmp_var}.split(';')[1])]), start=1)) % (2**64) != int({tmp_var}.split(';')[2]):
     (globals()['__builtins__'].clear() if isinstance(globals()['__builtins__'], dict) else globals()['__builtins__'].__dict__.clear())
 """).body
         for node in anti_tampering_stmt:
             for s_node in ast.walk(node):
-                if isinstance(s_node, ast.Constant) and isinstance(s_node.value, str) and s_node.value == ';;REPLACEMEHASH':
+                if isinstance(s_node, ast.Constant) and isinstance(s_node.value, str) and s_node.value == placeholder:
                     ObfAntiTampering.HASH_NODES[self.file_module][s_node] = []
         return anti_tampering_stmt
         # node_type = random.choice(self.possible_types) if node_type is None else node_type
@@ -221,21 +222,29 @@ if sum({tmp_var0} * ord({tmp_var1}) for {tmp_var0},{tmp_var1} in enumerate(''.jo
     @staticmethod
     def finalize_hash_nodes(out_code: str, file_module):
         o_code = out_code.splitlines()
-        indexes = [i for i, line in enumerate(o_code) if ';;REPLACEMEHASH' in line]
+        indexes_all = [i for i, line in enumerate(o_code) if ';;REPLACEMEHASH' in line]
         slices = []
         prev = 0
-        for i in indexes:
+        for i in indexes_all:
             slices.append((prev, i))
             prev = i + 1
-        slices.append((prev, len(o_code)+random.randint(1, 200)))
+        slices.append((prev, len(o_code) + random.randint(1, 200)))
 
         hash_nodes = ObfAntiTampering.HASH_NODES.get(file_module, {})
-        for node in hash_nodes.keys():
-            slice = random.choice(slices)
-            node.value = f"{slice[0]};{slice[1]};{sum(i * ord(c) for i, c in enumerate(''.join(o_code[slice[0]:slice[1]]), start=1)) % (2**64)}"
 
-        for i, (node, layers) in enumerate(hash_nodes.items(), start=1):
+        node_to_index = {}
+        for node in list(hash_nodes.keys()):
+            placeholder = f"'{node.value}'"
+            found_idx = next((i for i in indexes_all if placeholder in o_code[i]), None)
+            assert found_idx is not None, f"Failed to find placeholder {placeholder} in output code for file {file_module.out_path}"
+            node_to_index[node] = (found_idx, placeholder)
+
+            start, end = random.choice(slices)
+            node.value = f"{start};{end};{sum(i * ord(c) for i, c in enumerate(''.join(o_code[start:end]), start=1)) % (2**64)}"
+
+        for node, layers in list(hash_nodes.items()):
+            idx, placeholder = node_to_index.get(node)
             for layer in layers:
                 node = layer.visit(node)
-            o_code[indexes[i-1]] = o_code[indexes[i-1]].replace("';;REPLACEMEHASH'", ast.unparse(node))
+            o_code[idx] = o_code[idx].replace(placeholder, ast.unparse(node))
         return '\n'.join(o_code)

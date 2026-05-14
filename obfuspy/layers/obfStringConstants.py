@@ -140,7 +140,7 @@ class ObfStringConstants(ast.NodeTransformer):
 
     def visit_Constant(self, node):
         if isinstance(node.value, str):
-            if node.value == ';;REPLACEMEHASH':
+            if node.value.startswith(';;REPLACEMEHASH'):
                 return node
             return self.obf_string_node(node, self.randomizer)
         return node
