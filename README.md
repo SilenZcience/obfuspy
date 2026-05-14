@@ -99,6 +99,8 @@ obfuspy curently includes the following obfuscation layers:
 - Module Variables
 - Imports
 - Anti-Tampering Statements
+- Globals
+- Attributes
 
 <div id="made-with"></div>
 
