@@ -589,10 +589,13 @@ class GUI:
             'indentation': self.window.indentation_input.text().replace('\\t', '\t') or '    ',
         }
 
-    def load_settings_from_json(self, json_file_path: str) -> dict:
+    def load_settings_from_json(self, json_source) -> dict:
         try:
-            with open(json_file_path, 'r', encoding='utf-8') as json_file:
-                state = json.load(json_file)
+            if hasattr(json_source, 'read'):
+                state = json.load(json_source)
+            else:
+                with open(json_source, 'r', encoding='utf-8') as json_file:
+                    state = json.load(json_file)
             self.window._deserialize_state(state)
             return self._get_return_value()
         except Exception as exc:

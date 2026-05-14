@@ -79,19 +79,25 @@ def acc_py_files(arg_paths) -> set: # TODO: non python files should be copied to
                         file_modules.add(File_Module(in_file, out_file))
     return file_modules
 
-def main():
-    parser = argparse.ArgumentParser(description='obfuscate a python file/module.')
-    parser.add_argument('PATH', action='store', default=None,
-                        nargs='+', help='FILE(s) and/or FOLDER(s) to obfuscate')
-    parser.add_argument('--json', action='store', help='Path to JSON file to load settings from (overrides GUI)',
-                        default=None)
+def main(paths=None, json_settings=None):
+    if paths is None and json_settings is None:
+        parser = argparse.ArgumentParser(description='obfuscate a python file/module.')
+        parser.add_argument('PATH', action='store', default=None,
+                            nargs='+', help='FILE(s) and/or FOLDER(s) to obfuscate')
+        parser.add_argument('--json', action='store', help='Path to JSON file to load settings from (overrides GUI)',
+                            default=None)
+        args = parser.parse_args()
+        paths = args.PATH
+        json_settings = args.json
 
-    file_modules = acc_py_files(parser.parse_args().PATH)
-    json_settings_path = parser.parse_args().json
+    if paths and all(isinstance(path, File_Module) for path in paths):
+        file_modules = set(paths)
+    else:
+        file_modules = acc_py_files(paths or [])
 
     gui = GUI(OBFUSCATION_LAYERS)
-    if json_settings_path:
-        settings = gui.load_settings_from_json(json_settings_path)
+    if json_settings:
+        settings = gui.load_settings_from_json(json_settings)
         if settings is None:
             return
     else:
