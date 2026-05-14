@@ -404,23 +404,9 @@ class Obfuscator:
         for file_module in file_modules:
             file_module.module_name = Obfuscator._module_name_for(file_module, common_root)
 
-        has_function_layer =   any(layer is ObfDefnames        for layer, _ in settings['obf_layers'])
-        has_class_layer =      any(layer is ObfClassNames      for layer, _ in settings['obf_layers'])
-        has_class_var_layer =  any(layer is ObfClassVariables  for layer, _ in settings['obf_layers'])
-        has_module_var_layer = any(layer is ObfModuleVariables for layer, _ in settings['obf_layers'])
-        has_argument_layer =   any(layer is ObfDefArguments    for layer, _ in settings['obf_layers'])
         randomizer.project_context = {
             'root_path': common_root,
             'module_names': {file_module.in_path: file_module.module_name for file_module in file_modules},
-            'enabled_layers': {
-                'functions': has_function_layer,
-                'classes': has_class_layer,
-                'class_vars': has_class_var_layer,
-                'module_vars': has_module_var_layer,
-                'arguments': has_argument_layer,
-            },
-            # 'defined_names': Obfuscator._collect_defined_names(file_modules), # only so that builints does not overwrite. builtins should do this on its own when necceseary
-            # 'keyword_args_in_calls': set(),
         }
         SYMBOL_MAP.set_randomizer(randomizer)
 
