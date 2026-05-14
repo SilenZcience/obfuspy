@@ -30,7 +30,7 @@ def test_obfuspy():
         'indentation': '    ',
     }))
 
-    file_modules = acc_py_files([TESTFILES_DIR])
+    file_modules, _ = acc_py_files([TESTFILES_DIR])
 
     # json_file = io.StringIO(
     # )
