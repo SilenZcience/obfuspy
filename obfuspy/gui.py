@@ -1,10 +1,19 @@
 import json
+import random
 
 from PySide6.QtWidgets import *
 from PySide6.QtGui import *
 from PySide6.QtCore import *
 
 from obfuspy.util.charsets import CHARSETS
+
+
+def _random_layer_settings(layer_name: str) -> dict:
+    if layer_name in {'Anti-Debug Statements', 'Anti-Tampering Statements', 'Dead Code'}:
+        return {'probability': max(random.random(), 0.15)}
+    if layer_name == 'Numerical Constants':
+        return {'numerical_denominator': random.randint(2, 12)}
+    return {}
 
 
 class ObfLayer:
@@ -27,7 +36,7 @@ class ObfLayer:
 class DragDropList(QListWidget):
     def __init__(self):
         super().__init__()
-        self.setSelectionMode(QListWidget.SingleSelection)
+        self.setSelectionMode(QListWidget.ExtendedSelection)
         self.setDragDropMode(QListWidget.InternalMove)
         self.setStyleSheet("""
             QListWidget {
@@ -202,7 +211,7 @@ class DragDropWindow(QWidget):
         layer_label.setStyleSheet(label_style)
         settings_layout.addWidget(layer_label)
         self.method_combo = QComboBox()
-        self.method_combo.addItems(self.obfuscation_layers.keys())
+        self.method_combo.addItems(['Random Layer'] + list(self.obfuscation_layers.keys()))
         self.method_combo.currentTextChanged.connect(self.on_layer_changed)
         self.method_combo.setStyleSheet("""
             QComboBox {
@@ -319,6 +328,22 @@ class DragDropWindow(QWidget):
         """)
         settings_layout.addWidget(action_button)
 
+        add_ten_button = QPushButton('Add 10 Layers')
+        add_ten_button.clicked.connect(self.add_ten_steps)
+        add_ten_button.setStyleSheet("""
+            QPushButton {
+                background-color: #00ff00;
+                color: #202020;
+                padding: 8px 20px;
+                border-radius: 4px;
+                margin: 0 2px;
+            }
+            QPushButton:hover {
+                background-color: #15e304;
+            }
+        """)
+        settings_layout.addWidget(add_ten_button)
+
         return settings_layout
 
     def add_finish_layout(self) -> QVBoxLayout:
@@ -427,11 +452,15 @@ class DragDropWindow(QWidget):
             label.show()
             for widget in widgets:
                 widget.show()
+        if layer_name == 'Random Layer':
+            self.description_text.setText("Add a random obfuscation layer with randomized settings.")
+            return
         self.description_text.setText(clean_doc_text(self.obfuscation_layers.get(layer_name, self).__doc__))
 
-    def add_new_step(self):
+    def _create_layer_from_selection(self) -> ObfLayer:
         def clean_label_text(text):
             return ''.join(c if c.isalpha() else '_' for c in text.rstrip(':').lower())
+
         current_item = self.method_combo.currentText()
         additional_data = {}
         if current_item in self.optional_widgets:
@@ -441,27 +470,40 @@ class DragDropWindow(QWidget):
                     additional_data[clean_label_text(label.text())] = widget.value()
                 else:
                     print('Unknown widget type', type(widget))
-        layer = ObfLayer(current_item, additional_data)
+        elif current_item == 'Random Layer':
+            current_item = random.choice(list(self.obfuscation_layers.keys()))
+            additional_data = _random_layer_settings(current_item)
+
+        return ObfLayer(current_item, additional_data)
+
+    def _append_layer(self, layer: ObfLayer) -> None:
         item = QListWidgetItem(str(layer))
         item.setData(Qt.UserRole, layer)
         self.list_widget.addItem(item)
 
+    def add_new_step(self):
+        self._append_layer(self._create_layer_from_selection())
+
+    def add_ten_steps(self):
+        for _ in range(10):
+            self._append_layer(self._create_layer_from_selection())
+
     def duplicate_selected(self):
-        current_item = self.list_widget.selectedItems()
-        if current_item:
-            layer: ObfLayer = current_item[0].data(Qt.UserRole)
-            new_layer = layer.copy()
-            item = QListWidgetItem(str(new_layer))
-            item.setData(Qt.UserRole, new_layer)
-            self.list_widget.insertItem(
-                self.list_widget.row(current_item[0])+1,
-                item
-            )
+        selected_items = self.list_widget.selectedItems()
+        if selected_items:
+            selected_rows = sorted((self.list_widget.row(item), item) for item in selected_items)
+            for row, item in reversed(selected_rows):
+                layer: ObfLayer = item.data(Qt.UserRole)
+                new_layer = layer.copy()
+                duplicate_item = QListWidgetItem(str(new_layer))
+                duplicate_item.setData(Qt.UserRole, new_layer)
+                self.list_widget.insertItem(row + 1, duplicate_item)
 
     def remove_selected(self):
-        current_item = self.list_widget.selectedItems()
-        if current_item:
-            self.list_widget.takeItem(self.list_widget.row(current_item[0]))
+        selected_items = self.list_widget.selectedItems()
+        if selected_items:
+            for row in sorted((self.list_widget.row(item) for item in selected_items), reverse=True):
+                self.list_widget.takeItem(row)
 
     # def print_order(self):
     #     current_order = self.list_widget.get_items_order()
