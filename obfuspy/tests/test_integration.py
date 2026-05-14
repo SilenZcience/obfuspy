@@ -9,18 +9,11 @@ from pathlib import Path
 
 from obfuspy.__main__ import OBFUSCATION_LAYERS, acc_py_files, main
 from obfuspy.util.charsets import CHARSETS
+from obfuspy.gui import _random_layer_settings
 
 
 TESTFILES_DIR = Path(__file__).parent / 'testfiles'
 TESTFILES_OBF_DIR = Path(__file__).parent / 'obfuscated' / 'testfiles'
-
-
-def _layer_settings(layer_name: str, rng: random.Random) -> dict:
-    if layer_name in {'Anti-Debug Statements', 'Anti-Tampering Statements', 'Dead Code'}:
-        return {'probability': max(rng.random(), 0.15)}
-    if layer_name == 'Numerical Constants':
-        return {'numerical_denominator': rng.randint(2, 12)}
-    return {}
 
 
 def test_obfuspy():
@@ -30,7 +23,7 @@ def test_obfuspy():
     selected_layers = rng.choices(layer_names, k=layer_count)
 
     json_file = io.StringIO(json.dumps({
-        'layers': [{'name': layer_name, 'settings': _layer_settings(layer_name, rng)} for layer_name in selected_layers],
+        'layers': [{'name': layer_name, 'settings': _random_layer_settings(layer_name)} for layer_name in selected_layers],
         'random_name_length': rng.randint(1, 32),
         'random_charset_index': rng.randint(0, len(CHARSETS) - 1),
         'random_comment_length': rng.randint(-1, 32),
