@@ -232,6 +232,11 @@ class Obfuscator:
 
     @staticmethod
     def _collect_class_vars(file_modules, randomizer: Randomizer) -> None:
+        def is_valid_insert(name: str) -> None:
+            if name in ALL_BUILTINS:
+                return False
+            return True
+
         def collect_in_class_body(prefix_parts: list, body: list) -> None:
             for stmt in body:
 
@@ -249,19 +254,22 @@ class Obfuscator:
                 if isinstance(stmt, ast.Assign):
                     for target in stmt.targets:
                         for name in Obfuscator._collect_target_names(target):
+                            if is_valid_insert(name):
+                                SYMBOL_MAP.insert([*prefix_parts, Node.ClassVar(name)], {
+                                    'name': next(randomizer.random_name_gen)
+                                })
+                elif isinstance(stmt, ast.AnnAssign):
+                    for name in Obfuscator._collect_target_names(stmt.target):
+                        if is_valid_insert(name):
                             SYMBOL_MAP.insert([*prefix_parts, Node.ClassVar(name)], {
                                 'name': next(randomizer.random_name_gen)
                             })
-                elif isinstance(stmt, ast.AnnAssign):
-                    for name in Obfuscator._collect_target_names(stmt.target):
-                        SYMBOL_MAP.insert([*prefix_parts, Node.ClassVar(name)], {
-                            'name': next(randomizer.random_name_gen)
-                        })
                 elif isinstance(stmt, ast.AugAssign):
                     for name in Obfuscator._collect_target_names(stmt.target):
-                        SYMBOL_MAP.insert([*prefix_parts, Node.ClassVar(name)], {
-                            'name': next(randomizer.random_name_gen)
-                        })
+                        if is_valid_insert(name):
+                            SYMBOL_MAP.insert([*prefix_parts, Node.ClassVar(name)], {
+                                'name': next(randomizer.random_name_gen)
+                            })
 
                 for field_name in ('body', 'orelse', 'finalbody'):
                     child_body = getattr(stmt, field_name, None)
@@ -454,6 +462,8 @@ class Obfuscator:
                     rnd_cmt_list = list(randomizer.generate_random_comments(out_code))
                     file_module_lines = out_code.split('\n')
                     for i, (_, rnd_cmt) in enumerate(zip(file_module_lines, rnd_cmt_list)):
+                        if rnd_cmt is None:
+                            continue
                         file_module_lines[i] += f"#{rnd_cmt}"
                     out_code = '\n'.join(file_module_lines)
 

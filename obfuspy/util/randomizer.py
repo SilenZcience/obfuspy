@@ -1,6 +1,7 @@
 
 
 import builtins
+import io
 import itertools
 import json
 import keyword
@@ -8,6 +9,7 @@ import random
 import string
 import subprocess
 import sys
+import tokenize
 
 
 def _load_clean_builtins_default() -> set:
@@ -115,10 +117,23 @@ class Randomizer:
 
 
 
-    def generate_random_comments(self, code: str): # TODO: random also no quotes otherwise it can fuck up docstrings
+    def generate_random_comments(self, code: str):
         lines = code.split('\n')
-        for i, _ in enumerate(lines):
-            yield f"{next(self.random_comment_gen)}"
+        multiline_token_lines = set()
+        try:
+            tokens = tokenize.generate_tokens(io.StringIO(code).readline)
+            for tok in tokens:
+                start_row, _ = tok.start
+                end_row, _ = tok.end
+                if tok.type == tokenize.STRING and end_row > start_row:
+                    multiline_token_lines.update(range(start_row - 1, end_row))
+        except (tokenize.TokenError, IndentationError):
+            pass
+        for i, line in enumerate(lines):
+            if i in multiline_token_lines or line.rstrip('\r').endswith('\\'):
+                yield None
+            else:
+                yield f"{next(self.random_comment_gen)}"
             # if lines[i].strip():
             # else:
             #     r_line = random.choice(lines)
